@@ -50,6 +50,19 @@ def save_person(name: str, surname: str, secondname: str,
     return person_id
 
 
+def find_person_by_name(name: str, surname: str) -> str | None:
+    """
+    Szuka osoby po imieniu i nazwisku (wielkość liter nie ma znaczenia).
+    Zwraca person_id lub None jeśli nie znaleziono.
+    """
+    for p in load_all_persons():
+        info = p["info"]
+        if (info.get("name", "").strip().lower() == name.strip().lower()
+                and info.get("surname", "").strip().lower() == surname.strip().lower()):
+            return p["id"]
+    return None
+
+
 def add_fingerprint(person_id: str, embedding: np.ndarray,
                     face_image_bgr: np.ndarray = None,
                     check_duplicates: bool = True,

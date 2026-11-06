@@ -7,6 +7,7 @@ from db import (
     load_embeddings_matrix,
     save_person,
     add_fingerprint,
+    find_person_by_name,
     clean_duplicates,
 )
 
@@ -29,6 +30,46 @@ def ask_confirmation(prompt: str, default_y: bool) -> bool:
     if ans == "":
         return default_y
     return ans in ("y", "yes", "t", "tak")
+
+
+def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray):
+    """
+    Pyta o imię i nazwisko dla danego indexu (twarz).
+    Sprawdza czy taka osoba już istnieje w bazie:
+    - jeśli tak → dodaje nowy fingerprint do istniejącej osoby
+    - jeśli nie → tworzy nową osobę
+    """
+    user_input = input(f"data for #{index}: ").strip()
+    if not user_input:
+        print(f"   ⏭️  Pominięto #{index}")
+        return
+
+    parts = user_input.split()
+    name = parts[0] if len(parts) > 0 else ""
+    surname = parts[1] if len(parts) > 1 else ""
+    secondname = parts[2] if len(parts) > 2 else ""
+
+    if not name and not surname:
+        print(f"   ⏭️  Pominięto #{index} (brak imienia i nazwiska)")
+        return
+
+    existing_id = find_person_by_name(name, surname)
+    if existing_id:
+        new_idx = add_fingerprint(existing_id, embedding, face_crop,
+                                  check_duplicates=True)
+        if new_idx is not None:
+            print(f"   ✅ Dodano nowy fingerprint do istniejącej osoby {name} {surname} (indeks {new_idx})")
+        else:
+            print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
+    else:
+        person_id = save_person(
+            name=name,
+            surname=surname,
+            secondname=secondname,
+            embedding=embedding,
+            face_image_bgr=face_crop,
+        )
+        print(f"   ✅ Utworzono nową osobę {name} {surname} {secondname}: {person_id}")
 
 
 def recognize_from_file(image_path: str, tolerance: float = 0.4):
@@ -161,7 +202,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
                 else:
                     print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
             else:
-                print(f"   ⏭️  Pominięto #{entry['index']}")
+                handle_manual_entry(entry["index"], entry["embedding"], entry["face_crop"])
 
         elif entry["status"] == "confirm_low":
             pid = entry["person_id"]
@@ -176,32 +217,10 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
                 else:
                     print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
             else:
-                print(f"   ⏭️  Pominięto #{entry['index']}")
+                handle_manual_entry(entry["index"], entry["embedding"], entry["face_crop"])
 
         elif entry["status"] == "unknown":
-            uid = entry["unknown_index"]
-            user_input = input(f"data for #{uid}: ").strip()
-            if not user_input:
-                print(f"   ⏭️  Pominięto unknown #{uid}")
-                continue
-
-            parts = user_input.split()
-            name = parts[0] if len(parts) > 0 else ""
-            surname = parts[1] if len(parts) > 1 else ""
-            secondname = parts[2] if len(parts) > 2 else ""
-
-            if not name and not surname:
-                print(f"   ⏭️  Pominięto unknown #{uid} (brak imienia i nazwiska)")
-                continue
-
-            person_id = save_person(
-                name=name,
-                surname=surname,
-                secondname=secondname,
-                embedding=entry["embedding"],
-                face_image_bgr=entry["face_crop"],
-            )
-            print(f"   ✅ Zapisano unknown #{uid} jako nową osobę: {person_id} ({name} {surname} {secondname})")
+            handle_manual_entry(entry["unknown_index"], entry["embedding"], entry["face_crop"])
 
 
 if __name__ == "__main__":
