@@ -6,9 +6,11 @@ from db import load_all_persons
 
 
 def main():
-    tolerance = float(sys.argv[1]) if len(sys.argv) > 1 else 0.4
+    tolerance = float(sys.argv[1]) if len(sys.argv) > 1 else 0.2
     camera_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    process_every = int(sys.argv[3]) if len(sys.argv) > 3 else 2  # co ile klatek przetwarzać
+    process_every = (
+        int(sys.argv[3]) if len(sys.argv) > 3 else 20
+    )  # co ile klatek przetwarzać
 
     app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(320, 320))  # mniejsze = szybciej
@@ -66,13 +68,27 @@ def main():
 
         # Rysuj buforowane wyniki na bieżącej klatce (bardzo szybko)
         out = frame.copy()
-        for (x1, y1, x2, y2, label, color) in cached_results:
+        for x1, y1, x2, y2, label, color in cached_results:
             cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(out, label, (x1, max(0, y1 - 10)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            cv2.putText(
+                out,
+                label,
+                (x1, max(0, y1 - 10)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                2,
+            )
 
-        cv2.putText(out, f"co {process_every} klatki | q/ESC = wyjscie", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(
+            out,
+            f"co {process_every} klatki | q/ESC = wyjscie",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2,
+        )
 
         cv2.imshow("FaceSearch - Live Preview", out)
         key = cv2.waitKey(1) & 0xFF

@@ -17,31 +17,37 @@ persons/<hash>/
 pip install -r requirements.txt
 ```
 
-## Dodawanie osoby do bazy
-
-```bash
-python enroll.py zdjecie.jpg Jan Kowalski Nowy
-```
-
-Tworzy folder `persons/<uuid>/` z fingerprintiem, zdjęciem i danymi.
-
-## Rozpoznawanie
+## Rozpoznawanie i dodawanie osób
 
 ```bash
 python recognize.py zdjecie_testowe.jpg [tolerancja=0.4]
 ```
 
-- Im niższa tolerancja, tym bardziej restrykcyjne dopasowanie.
-- Wynik wypisywany jest w konsoli i zapisywany do `result.jpg`.
+- Program wykrywa twarze i porównuje z bazą.
+- Znane osoby są rozpoznawane po imieniu i nazwisku.
+- Nieznane twarze są oznaczone jako `unknown #0`, `unknown #1` itd.
+- Po zakończeniu analizy program pyta w konsoli `data for #N:` dla każdej nieznanej osoby.
+  - Wciśnij **Enter** — osoba pozostaje nieznana i nie jest zapisywana.
+  - Wpisz `imie nazwisko [drugieimie]` — osoba zostaje dodana do bazy (folder `persons/<hash>/` z `fingerprint.npy`, `photo.png` i `info.json`).
+- Wynik z ramkami zapisano do `result.jpg`.
+
+## Podgląd na żywo z kamery
+
+```bash
+python live.py [tolerancja=0.4] [kamera=0] [co_ile_klatek=2]
+```
+
+- Zielona ramka = rozpoznana osoba, czerwona = nieznana.
+- Wyjście: `q` lub `ESC`.
 
 ## Przykład
 
 ```bash
-# rejestracja
-python enroll.py jan.jpg Jan Kowalski Nowy
-
-# rozpoznawanie
+# rozpoznaj i ewentualnie dodaj nieznane osoby
 python recognize.py test.jpg 0.4
+
+# podgląd na żywo
+python live.py 0.4 0 2
 ```
 
 ## Uwagi prawne/etyczne
