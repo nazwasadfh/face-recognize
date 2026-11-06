@@ -2,12 +2,25 @@
 """
 Importuje dane z plików JSON w folderze input/ do persons/<hash>/info.json.
 
-Dla każdego pliku input/*.json:
-1. Szuka imienia i nazwiska (w różnych możliwych kluczach).
-2. Sprawdza czy osoba o takim imieniu i nazwisku istnieje w persons/*/info.json.
-3. Jeśli tak -> dopisuje dane z input do info.json osoby (pole "imported_from_input").
-4. Jeśli nie -> wypisuje "nie znaleziono $nazwisko $imie" i zostawia plik w input/.
-5. Jeśli tak -> usuwa plik z input/.
+Struktura plików input/*.json (identyczne klucze we wszystkich):
+{
+  "id": 10,
+  "name": "Daniel Słyk",        <- imię i nazwisko razem
+  "full_name": "Daniel Słyk",
+  "alias": "Słoik",
+  "birthday": null,
+  "address": null,
+  "photo": null,
+  "phones": [{"number": "+48 ..."}],
+  "emails": [],
+  "custom": {...}
+}
+
+Dla każdego pliku:
+1. Rozbija 'name' na imię (pierwsze słowo) i nazwisko (reszta).
+2. Szuka osoby o takim imieniu i nazwisku w persons/*/info.json.
+3. Jeśli znaleziono -> dopisuje dane z input do info.json (pole "imported_from_input") i usuwa plik z input/.
+4. Jeśli nie znaleziono -> wypisuje "nie znaleziono $nazwisko $imie" i zostawia plik.
 """
 
 import json
@@ -17,27 +30,13 @@ from pathlib import Path
 INPUT_DIR = Path("input")
 PERSONS_DIR = Path("persons")
 
-# Możliwe klucze imienia i nazwiska w plikach JSON z input/
-NAME_KEYS = ("imie", "imię", "name", "first_name", "firstname", "imya")
-SURNAME_KEYS = ("nazwisko", "surname", "last_name", "lastname", "familia")
 
-
-def find_name_and_surname(data: dict):
-    """Zwraca (imie, nazwisko) lub (None, None) jeśli nie znaleziono."""
-    imie = None
-    nazwisko = None
-
-    for key in NAME_KEYS:
-        if key in data and data[key]:
-            imie = str(data[key]).strip()
-            break
-
-    for key in SURNAME_KEYS:
-        if key in data and data[key]:
-            nazwisko = str(data[key]).strip()
-            break
-
-    return imie, nazwisko
+def split_name(full_name: str):
+    """Rozbija 'Imię Nazwisko' na (imie, nazwisko). Pierwsze słowo = imię, reszta = nazwisko."""
+    parts = full_name.strip().split()
+    if len(parts) < 2:
+        return parts[0] if parts else "", ""
+    return parts[0], " ".join(parts[1:])
 
 
 def find_person_by_name(name: str, surname: str):
@@ -63,14 +62,13 @@ def find_person_by_name(name: str, surname: str):
 
 
 def import_data_to_info(info_path: Path, input_data: dict):
-    """Dopisuje dane z input do info.json osoby."""
+    """Dopisuje dane z input do info.json osoby (pod kluczem 'imported_from_input' jako lista)."""
     with open(info_path, encoding="utf-8") as f:
         info = json.load(f)
 
     if "imported_from_input" not in info:
         info["imported_from_input"] = []
 
-    # Dodajemy dane z input jako nowy wpis
     info["imported_from_input"].append(input_data)
 
     with open(info_path, "w", encoding="utf-8") as f:
@@ -94,14 +92,15 @@ def main():
             with open(json_file, encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            print(f"❌ {json_file.name}: nie można wczytać JSON ({e}) — pomijam, zostawiam plik.")
+            print(f"❌ {json_file.name}: nie można wczytać JSON ({e}) — zostawiam plik.")
             continue
 
-        imie, nazwisko = find_name_and_surname(data)
-
-        if not imie or not nazwisko:
-            print(f"⚠️  {json_file.name}: nie znaleziono imienia i nazwiska w pliku — zostawiam.")
+        full_name = data.get("name") or data.get("full_name") or ""
+        if not full_name:
+            print(f"⚠️  {json_file.name}: brak pola 'name' — zostawiam plik.")
             continue
+
+        imie, nazwisko = split_name(full_name)
 
         person_dir, info = find_person_by_name(imie, nazwisko)
 
@@ -109,7 +108,7 @@ def main():
             print(f"❌ nie znaleziono {nazwisko} {imie} — zostawiam plik {json_file.name}")
             continue
 
-        # Znaleziono osobę -> dopisz dane do info.json i usuń plik z input/
+        # Znaleziono -> dopisz dane do info.json i usuń plik
         info_path = person_dir / "info.json"
         import_data_to_info(info_path, data)
         json_file.unlink()
