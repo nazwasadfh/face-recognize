@@ -51,11 +51,20 @@ def save_person(name: str, surname: str, secondname: str,
 
 
 def add_fingerprint(person_id: str, embedding: np.ndarray,
-                    face_image_bgr: np.ndarray = None) -> int:
+                    face_image_bgr: np.ndarray = None,
+                    check_duplicates: bool = True,
+                    duplicate_threshold: float = 0.99) -> int | None:
     """
     Dodaje kolejny fingerprint do istniejącej osoby.
-    Zwraca indeks nowego pliku (np. 1, 2, 3...).
+    Zwraca indeks nowego pliku (np. 1, 2, 3...) lub None jeśli zablokowano jako duplikat.
+
+    Parametry:
+    - check_duplicates: jeśli True, sprawdza czy embedding nie jest już w bazie (>= threshold)
+    - duplicate_threshold: próg acima którego uznajemy za duplikat (0.99 = prawie to samo zdjęcie)
     """
+    if check_duplicates and is_duplicate_embedding(embedding, threshold=duplicate_threshold):
+        return None  # zablokowano jako duplikat
+
     person_dir = PERSONS_DIR / person_id
     fp_dir = person_dir / "fingerprints"
     fp_dir.mkdir(parents=True, exist_ok=True)
@@ -103,9 +112,6 @@ def load_embeddings_matrix():
 
     matrix : np.ndarray (N, 512) – wszystkie fingerprints wszystkich osób
     meta   : lista słowników {person_id, info, fp_idx} odpowiadających wierszom
-
-    Dzięki temu porównanie jednej twarzy z całą bazą to jedna operacja macierzowa
-    (matrix @ emb), a nie pętla po tysiącach osób w Pythonie.
     """
     persons = load_all_persons()
     rows = []
@@ -121,3 +127,60 @@ def load_embeddings_matrix():
     if not rows:
         return np.empty((0, 512), dtype=np.float32), []
     return np.vstack(rows).astype(np.float32), meta
+
+
+def is_duplicate_embedding(embedding: np.ndarray, threshold: float = 0.99) -> bool:
+    """
+    Sprawdza czy dany embedding jest duplikatem istniejącego fingerprintu w bazie.
+    Zwraca True jeśli istnieje fingerprint z cosine similarity >= threshold.
+    """
+    matrix, _ = load_embeddings_matrix()
+    if len(matrix) == 0:
+        return False
+    sims = matrix @ embedding  # wszystkie wektory są znormalizowane przez insightface
+    best_sim = float(np.max(sims))
+    return best_sim >= threshold
+
+
+def clean_duplicates(threshold: float = 0.99) -> int:
+    """
+    Usuwa duplikaty fingerprintów z całej bazy.
+    Dla każdego fingerprintu porównuje z wszystkimi poprzednio zachowanymi;
+    jeśli similarity >= threshold, plik jest usuwany.
+    Zwraca liczbę usuniętych plików.
+    """
+    persons = load_all_persons()
+    all_fps = []  # (person_id, idx, fp_file_path, embedding)
+
+    for p in persons:
+        fp_dir = PERSONS_DIR / p["id"] / "fingerprints"
+        if not fp_dir.exists():
+            continue
+        files = sorted(fp_dir.glob("*.npy"),
+                       key=lambda pth: int(pth.stem) if pth.stem.isdigit() else 0)
+        for fp_file in files:
+            try:
+                emb = np.load(fp_file)
+            except Exception:
+                continue
+            idx = int(fp_file.stem) if fp_file.stem.isdigit() else 0
+            all_fps.append((p["id"], idx, fp_file, emb))
+
+    kept_indices = []  # indeksy w all_fps, które zostają
+    removed = 0
+
+    for i, (pid, idx, fp_file, emb) in enumerate(all_fps):
+        is_dup = False
+        for j in kept_indices:
+            _, _, _, emb_j = all_fps[j]
+            sim = float(np.dot(emb, emb_j))
+            if sim >= threshold:
+                is_dup = True
+                break
+        if is_dup:
+            fp_file.unlink(missing_ok=True)
+            removed += 1
+        else:
+            kept_indices.append(i)
+
+    return removed
