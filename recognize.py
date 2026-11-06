@@ -1,5 +1,6 @@
 import sys
 import cv2
+import subprocess
 import numpy as np
 from insightface.app import FaceAnalysis
 from db import (
@@ -64,7 +65,6 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
     out = img.copy()
     results = []  # wyniki dla każdego entry (twarzy)
-    unknown_counter = 0
 
     for i, face in enumerate(faces):
         x1, y1, x2, y2 = face.bbox[:4].astype(int)
@@ -122,11 +122,10 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             print(f"⚠️  {label}")
 
         else:
-            label = f"#{i}: unknown #{unknown_counter}"
+            label = f"#{i}: unknown #{i}"
             color = (0, 0, 255)  # czerwony
             entry["status"] = "unknown"
-            entry["unknown_index"] = unknown_counter
-            unknown_counter += 1
+            entry["unknown_index"] = i
             print(f"❌ {label}")
 
         cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
@@ -136,6 +135,13 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
     cv2.imwrite("result.jpg", out)
     print("\nWynik z ramkami zapisano do result.jpg")
+
+    # Otwórz wynik w eog (Eye of GNOME), jeśli dostępne
+    try:
+        subprocess.Popen(["eog", "result.jpg"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        print("Nie znaleziono eog – otwórz result.jpg własnym programem do obrazów.")
 
     # --- Interaktywne potwierdzenie / dodawanie nowych osób ---
     for entry in results:
@@ -196,10 +202,6 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
                 face_image_bgr=entry["face_crop"],
             )
             print(f"   ✅ Zapisano unknown #{uid} jako nową osobę: {person_id} ({name} {surname} {secondname})")
-
-    cv2.imshow("Rozpoznawanie twarzy", out)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
