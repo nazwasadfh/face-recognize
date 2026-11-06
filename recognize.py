@@ -5,18 +5,32 @@ from insightface.app import FaceAnalysis
 from db import load_embeddings_matrix, save_person, add_fingerprint
 
 
-# --- Progi decyzyjne (dostosuj do swoich potrzeb) ---
-AUTO_CONFIRM = 0.75   # >=  => automatycznie rozpoznane (zielona ramka)
-ASK_THRESHOLD = 0.50  # >= i < AUTO_CONFIRM => pytaj o potwierdzenie (żółta ramka)
-# poniżej ASK_THRESHOLD => unknown (czerwona ramka)
+# --- Progi decyzyjne ---
+AUTO_THRESHOLD = 0.30    # >=  => pyta Y/n (enter = Y), dodaje fingerprint do tej osoby
+LOW_CONF_THRESHOLD = 0.10  # < AUTO_THRESHOLD ale >= LOW => pyta Y/n z ostrzeżeniem (enter = N)
+UNKNOWN_THRESHOLD = 0.10   # <  => unknown #N, prosi o dane od użytkownika
+
+
+def ask_confirmation(prompt: str, default_y: bool) -> bool:
+    """
+    Pyta użytkownika Y/n.
+    default_y=True  -> enter oznacza Y
+    default_y=False -> enter oznacza N
+    """
+    suffix = "(Y/n)" if default_y else "(y/N)"
+    ans = input(f"{prompt} {suffix}: ").strip().lower()
+    if ans == "":
+        return default_y
+    return ans in ("y", "yes", "t", "tak")
 
 
 def recognize_from_file(image_path: str, tolerance: float = 0.4):
     """
-    Rozpoznaje twarze na obrazie.
+    Rozpoznaje twarze na obrazie i pozwala interaktywnie dodać nowe fingerprinti
+    do istniejących osób lub utworzyć nowe osoby z nieznanych twarzy.
 
-    - tolerance jest zachowane dla kompatybilności wywołania CLI,
-      ale wewnątrz używane są powyższe progi AUTO_CONFIRM / ASK_THRESHOLD.
+    `tolerance` jest zachowane dla kompatybilności wywołania CLI,
+    ale wewnątrz używane są powyższe progi.
     """
     app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(640, 640))
@@ -66,24 +80,25 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             "embedding": emb,
         }
 
-        if best_sim >= AUTO_CONFIRM and best_meta is not None:
+        if best_sim >= AUTO_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f})"
             color = (0, 255, 0)  # zielony
-            entry["status"] = "confirmed"
-            entry["person_id"] = best_meta["person_id"]
-            entry["sim"] = best_sim
-            print(f"✅ {label}")
-
-        elif best_sim >= ASK_THRESHOLD and best_meta is not None:
-            info = best_meta["info"]
-            label = f"#{i}: ? {info['name']} {info['surname']} ({best_sim:.2f})"
-            color = (0, 255, 255)  # żółty
-            entry["status"] = "ask"
+            entry["status"] = "confirm_high"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
             entry["candidate_name"] = f"{info['name']} {info['surname']}"
-            print(f"❓ {label}")
+            print(f"✅ {label}")
+
+        elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
+            info = best_meta["info"]
+            label = f"#{i}: ? {info['name']} {info['surname']} ({best_sim:.2f})"
+            color = (0, 255, 255)  # żółty
+            entry["status"] = "confirm_low"
+            entry["person_id"] = best_meta["person_id"]
+            entry["sim"] = best_sim
+            entry["candidate_name"] = f"{info['name']} {info['surname']}"
+            print(f"⚠️  {label}")
 
         else:
             label = f"#{i}: unknown #{unknown_counter}"
@@ -103,11 +118,22 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
     # --- Interaktywne potwierdzenie / dodawanie nowych osób ---
     for entry in results:
-        if entry["status"] == "ask":
+        if entry["status"] == "confirm_high":
             pid = entry["person_id"]
             cand = entry["candidate_name"]
-            ans = input(f"Czy #{entry['index']} to {cand}? (t/n): ").strip().lower()
-            if ans in ("t", "tak", "y", "yes"):
+            sim = entry["sim"]
+            if ask_confirmation(f"Czy #{entry['index']} to {cand} ({sim:.2f})?", default_y=True):
+                add_fingerprint(pid, entry["embedding"], entry["face_crop"])
+                print(f"   ✅ Dodano nowy fingerprint do {cand}")
+            else:
+                print(f"   ⏭️  Pominięto #{entry['index']}")
+
+        elif entry["status"] == "confirm_low":
+            pid = entry["person_id"]
+            cand = entry["candidate_name"]
+            sim = entry["sim"]
+            print(f"⚠️  Wynik nie był wysoki ({sim:.2f}).")
+            if ask_confirmation(f"Czy #{entry['index']} to {cand}?", default_y=False):
                 add_fingerprint(pid, entry["embedding"], entry["face_crop"])
                 print(f"   ✅ Dodano nowy fingerprint do {cand}")
             else:
