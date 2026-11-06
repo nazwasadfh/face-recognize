@@ -101,7 +101,7 @@ def main():
     camera_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
     process_every = int(sys.argv[3]) if len(sys.argv) > 3 else 2
 
-    app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    app = FaceAnalysis(name="buffalo_l", root="models", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(320, 320))
 
     matrix, meta = load_embeddings_matrix()

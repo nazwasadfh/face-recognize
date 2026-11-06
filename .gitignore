@@ -8,3 +8,5 @@ result.jpg
 .env
 persons/
 snap.jpg
+models/
+!models/.gitkeep

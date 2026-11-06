@@ -44,7 +44,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
     if removed:
         print(f"🧹 Usunięto {removed} duplikat(ów) fingerprintów z bazy.\n")
 
-    app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    app = FaceAnalysis(name="buffalo_l", root="models", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(640, 640))
 
     img = cv2.imread(image_path)
