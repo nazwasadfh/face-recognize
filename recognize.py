@@ -9,11 +9,12 @@ from db import (
     clean_duplicates,
 )
 
+
 # --- Progi decyzyjne ---
 AUTO_THRESHOLD = 0.30          # >=  => pyta Y/n (enter = Y), dodaje fingerprint do tej osoby
 LOW_CONF_THRESHOLD = 0.10      # < AUTO_THRESHOLD ale >= LOW => pyta Y/n z ostrzeżeniem (enter = N)
 UNKNOWN_THRESHOLD = 0.10       # <  => unknown #N, prosi o dane od użytkownika
-DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => ostrzeżenie o prawdopodobnym duplikacie z tego samego zdjęcia
+DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => wynik 1.00, to na 100% ta sama osoba, nie dodaje duplikatu
 
 
 def ask_confirmation(prompt: str, default_y: bool) -> bool:
@@ -92,13 +93,13 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
         if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
-            label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f}) [DUPLIKAT?]"
-            color = (0, 255, 255)  # żółty – ostrzeżenie o duplikacie
+            label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f}) [duplikat]"
+            color = (0, 255, 0)  # zielony – wynik poprawny, to na 100% ta sama osoba
             entry["status"] = "duplicate_warning"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
             entry["candidate_name"] = f"{info['name']} {info['surname']}"
-            print(f"⚠️  {label}")
+            print(f"✅ #{i}: {info['name']} {info['surname']} ({best_sim:.2f}) – duplikat, to na 100% ta sama osoba")
 
         elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
@@ -139,19 +140,8 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
     # --- Interaktywne potwierdzenie / dodawanie nowych osób ---
     for entry in results:
         if entry["status"] == "duplicate_warning":
-            pid = entry["person_id"]
-            cand = entry["candidate_name"]
-            sim = entry["sim"]
-            print(f"⚠️  Wynik {sim:.2f} – fingerprint z tego zdjęcia prawdopodobnie już istnieje.")
-            if ask_confirmation(f"Czy na pewno dodać duplikat dla #{entry['index']} ({cand})?", default_y=False):
-                new_idx = add_fingerprint(pid, entry["embedding"], entry["face_crop"],
-                                          check_duplicates=True)
-                if new_idx is not None:
-                    print(f"   ✅ Dodano nowy fingerprint do {cand} (indeks {new_idx})")
-                else:
-                    print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
-            else:
-                print(f"   ⏭️  Pominięto #{entry['index']}")
+            # Nie pyta, nie dodaje fingerprinta – tylko informuje
+            continue
 
         elif entry["status"] == "confirm_high":
             pid = entry["person_id"]
