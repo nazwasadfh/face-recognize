@@ -12,3 +12,4 @@ models/
 makemeaphoto
 photos/
 input/
+!input/.gitkeep
