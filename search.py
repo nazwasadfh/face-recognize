@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Wyszukiwarka osób po imieniu.
+Search people by name.
 
-Użycie:
-    python search.py <imie>           # szuka częściowo (case-insensitive)
-    python search.py <imie> --exact   # szuka dokładnie (case-insensitive)
+Usage:
+    python search.py <name>           # partial match (case-insensitive)
+    python search.py <name> --exact   # exact match (case-insensitive)
 
-Pokazuje person_id oraz całą zawartość info.json dla znalezionych osób.
+Prints person_id and full info.json content for found people.
 """
 
 import json
@@ -17,9 +17,9 @@ PERSONS_DIR = Path("persons")
 
 
 def search_by_name(query: str, exact: bool = False):
-    """Szuka osób po imieniu w persons/*/info.json."""
+    """Search for people by name in persons/*/info.json."""
     if not PERSONS_DIR.exists():
-        print("Folder persons/ nie istnieje.")
+        print("Folder persons/ does not exist.")
         return []
 
     query_lower = query.strip().lower()
@@ -60,9 +60,9 @@ def search_by_name(query: str, exact: bool = False):
 
 def main():
     if len(sys.argv) < 2:
-        print("Użycie: python search.py <imie> [--exact]")
-        print("  <imie>    - imię do wyszukania (częściowe dopasowanie)")
-        print("  --exact   - dokładne dopasowanie imienia")
+        print("Usage: python search.py <name> [--exact]")
+        print("  <name>    - name to search for (partial match)")
+        print("  --exact   - exact name match")
         sys.exit(1)
 
     query = sys.argv[1]
@@ -71,10 +71,10 @@ def main():
     results = search_by_name(query, exact=exact)
 
     if not results:
-        print(f"Nie znaleziono osoby o imieniu zawierającym '{query}'.")
+        print(f"No person found with name containing '{query}'.")
         return
 
-    print(f"Znaleziono {len(results)} osob/ę/ów:\n")
+    print(f"Found {len(results)} person(s):\n")
     for r in results:
         info = r["info"]
         print(f"ID: {r['person_id']}")

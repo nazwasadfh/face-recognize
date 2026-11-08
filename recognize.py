@@ -12,18 +12,18 @@ from db import (
 )
 
 
-# --- Progi decyzyjne ---
-AUTO_THRESHOLD = 0.30          # >=  => pyta Y/n (enter = Y), dodaje fingerprint do tej osoby
-LOW_CONF_THRESHOLD = 0.10      # < AUTO_THRESHOLD ale >= LOW => pyta Y/n z ostrzeżeniem (enter = N)
-UNKNOWN_THRESHOLD = 0.10       # <  => unknown #N, prosi o dane od użytkownika
-DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => wynik 1.00, to na 100% ta sama osoba, nie dodaje duplikatu
+# --- Decision thresholds ---
+AUTO_THRESHOLD = 0.30          # >=  => ask Y/n (Enter = Y), add fingerprint to this person
+LOW_CONF_THRESHOLD = 0.10      # < AUTO_THRESHOLD but >= LOW => ask Y/n with warning (Enter = N)
+UNKNOWN_THRESHOLD = 0.10       # <  => unknown #N, ask user for data
+DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => result 1.00, this is 100% the same person, do not add duplicate
 
 
 def ask_confirmation(prompt: str, default_y: bool) -> bool:
     """
-    Pyta użytkownika Y/n.
-    default_y=True  -> enter oznacza Y
-    default_y=False -> enter oznacza N
+    Ask user Y/n.
+    default_y=True  -> Enter means Y
+    default_y=False -> Enter means N
     """
     suffix = "(Y/n)" if default_y else "(y/N)"
     ans = input(f"{prompt} {suffix}: ").strip().lower()
@@ -34,14 +34,14 @@ def ask_confirmation(prompt: str, default_y: bool) -> bool:
 
 def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray):
     """
-    Pyta o imię i nazwisko dla danego indexu (twarz).
-    Sprawdza czy taka osoba już istnieje w bazie:
-    - jeśli tak → dodaje nowy fingerprint do istniejącej osoby
-    - jeśli nie → tworzy nową osobę
+    Ask for name and surname for a given face index.
+    Checks if such person already exists in the database:
+    - if yes → adds a new fingerprint to the existing person
+    - if no → creates a new person
     """
     user_input = input(f"data for #{index}: ").strip()
     if not user_input:
-        print(f"   ⏭️  Pominięto #{index}")
+        print(f"   ⏭️  Skipped #{index}")
         return
 
     parts = user_input.split()
@@ -50,7 +50,7 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
     secondname = parts[2] if len(parts) > 2 else ""
 
     if not name and not surname:
-        print(f"   ⏭️  Pominięto #{index} (brak imienia i nazwiska)")
+        print(f"   ⏭️  Skipped #{index} (no name and surname)")
         return
 
     existing_id = find_person_by_name(name, surname)
@@ -58,9 +58,9 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
         new_idx = add_fingerprint(existing_id, embedding, face_crop,
                                   check_duplicates=True)
         if new_idx is not None:
-            print(f"   ✅ Dodano nowy fingerprint do istniejącej osoby {name} {surname} (indeks {new_idx})")
+            print(f"   ✅ Added new fingerprint to existing person {name} {surname} (index {new_idx})")
         else:
-            print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
+            print(f"   ⛔ Blocked as duplicate (already exists in database)")
     else:
         person_id = save_person(
             name=name,
@@ -69,43 +69,43 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
             embedding=embedding,
             face_image_bgr=face_crop,
         )
-        print(f"   ✅ Utworzono nową osobę {name} {surname} {secondname}: {person_id}")
+        print(f"   ✅ Created new person {name} {surname} {secondname}: {person_id}")
 
 
 def recognize_from_file(image_path: str, tolerance: float = 0.4):
     """
-    Rozpoznaje twarze na obrazie i pozwala interaktywnie dodać nowe fingerprinti
-    do istniejących osób lub utworzyć nowe osoby z nieznanych twarzy.
+    Recognizes faces in an image and allows interactively adding new fingerprints
+    to existing persons or creating new persons from unknown faces.
 
-    `tolerance` jest zachowane dla kompatybilności wywołania CLI,
-    ale wewnątrz używane są powyższe progi.
+    `tolerance` is kept for CLI compatibility,
+    but internally the thresholds above are used.
     """
-    # Automatyczne czyszczenie duplikatów przy starcie
+    # Automatic duplicate cleanup on start
     removed = clean_duplicates()
     if removed:
-        print(f"🧹 Usunięto {removed} duplikat(ów) fingerprintów z bazy.\n")
+        print(f"🧹 Removed {removed} duplicate fingerprint(s) from database.\n")
 
     app = FaceAnalysis(name="buffalo_l", root=".", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(640, 640))
 
     img = cv2.imread(image_path)
     if img is None:
-        print(f"❌ Nie można wczytać obrazu: {image_path}")
+        print(f"❌ Cannot load image: {image_path}")
         return
 
     faces = app.get(img)
     if not faces:
-        print("❌ Nie wykryto twarzy na zdjęciu.")
+        print("❌ No faces detected in the image.")
         return
 
-    print(f"Wykryto {len(faces)} twarz/twarze.\n")
+    print(f"Detected {len(faces)} face(s).\n")
 
-    # Wszystkie fingerprints z bazy w jednej macierzy – szybkie batch cosine similarity
+    # All fingerprints from the database in one matrix — fast batch cosine similarity
     matrix, meta = load_embeddings_matrix()
     has_db = len(matrix) > 0
 
     out = img.copy()
-    results = []  # wyniki dla każdego entry (twarzy)
+    results = []  # results for each entry (face)
 
     for i, face in enumerate(faces):
         x1, y1, x2, y2 = face.bbox[:4].astype(int)
@@ -119,7 +119,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
         best_meta = None
 
         if has_db:
-            # cosine similarity: wszystkie wektory są już znormalizowane przez insightface
+            # cosine similarity: all vectors are already normalized by insightface
             sims = matrix @ emb  # shape (N,)
             best_idx = int(np.argmax(sims))
             best_sim = float(sims[best_idx])
@@ -134,18 +134,18 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
         if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
-            label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f}) [duplikat]"
-            color = (0, 255, 0)  # zielony – wynik poprawny, to na 100% ta sama osoba
+            label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
+            color = (0, 255, 0)  # green — correct result, this is 100% the same person
             entry["status"] = "duplicate_warning"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
             entry["candidate_name"] = f"{info['name']} {info['surname']}"
-            print(f"✅ #{i}: {info['name']} {info['surname']} ({best_sim:.2f}) – duplikat, to na 100% ta sama osoba")
+            print(f"✅ #{i}: {info['name']} {info['surname']} ({best_sim:.2f}) – duplicate, this is 100% the same person")
 
         elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f})"
-            color = (0, 255, 0)  # zielony
+            color = (0, 255, 0)  # green
             entry["status"] = "confirm_high"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
@@ -155,7 +155,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
         elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: ? {info['name']} {info['surname']} ({best_sim:.2f})"
-            color = (0, 255, 255)  # żółty
+            color = (0, 255, 255)  # yellow
             entry["status"] = "confirm_low"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
@@ -164,7 +164,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
         else:
             label = f"#{i}: unknown #{i}"
-            color = (0, 0, 255)  # czerwony
+            color = (0, 0, 255)  # red
             entry["status"] = "unknown"
             entry["unknown_index"] = i
             print(f"❌ {label}")
@@ -175,32 +175,32 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
         results.append(entry)
 
     cv2.imwrite("result.jpg", out)
-    print("\nWynik z ramkami zapisano do result.jpg")
+    print("\nResult with boxes saved to result.jpg")
 
-    # Otwórz wynik w eog (Eye of GNOME), jeśli dostępne
+    # Open result with eog (Eye of GNOME) if available
     try:
         subprocess.Popen(["eog", "result.jpg"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:
-        print("Nie znaleziono eog – otwórz result.jpg własnym programem do obrazów.")
+        print("eog not found – open result.jpg with your own image viewer.")
 
-    # --- Interaktywne potwierdzenie / dodawanie nowych osób ---
+    # --- Interactive confirmation / adding new people ---
     for entry in results:
         if entry["status"] == "duplicate_warning":
-            # Nie pyta, nie dodaje fingerprinta – tylko informuje
+            # Does not ask, does not add fingerprint — only informs
             continue
 
         elif entry["status"] == "confirm_high":
             pid = entry["person_id"]
             cand = entry["candidate_name"]
             sim = entry["sim"]
-            if ask_confirmation(f"Czy #{entry['index']} to {cand} ({sim:.2f})?", default_y=True):
+            if ask_confirmation(f"Is #{entry['index']} {cand} ({sim:.2f})?", default_y=True):
                 new_idx = add_fingerprint(pid, entry["embedding"], entry["face_crop"],
                                           check_duplicates=True)
                 if new_idx is not None:
-                    print(f"   ✅ Dodano nowy fingerprint do {cand} (indeks {new_idx})")
+                    print(f"   ✅ Added new fingerprint to {cand} (index {new_idx})")
                 else:
-                    print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
+                    print(f"   ⛔ Blocked as duplicate (already exists in database)")
             else:
                 handle_manual_entry(entry["index"], entry["embedding"], entry["face_crop"])
 
@@ -208,14 +208,14 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             pid = entry["person_id"]
             cand = entry["candidate_name"]
             sim = entry["sim"]
-            print(f"⚠️  Wynik nie był wysoki ({sim:.2f}).")
-            if ask_confirmation(f"Czy #{entry['index']} to {cand}?", default_y=False):
+            print(f"⚠️  Confidence was not high ({sim:.2f}).")
+            if ask_confirmation(f"Is #{entry['index']} {cand}?", default_y=False):
                 new_idx = add_fingerprint(pid, entry["embedding"], entry["face_crop"],
                                           check_duplicates=True)
                 if new_idx is not None:
-                    print(f"   ✅ Dodano nowy fingerprint do {cand} (indeks {new_idx})")
+                    print(f"   ✅ Added new fingerprint to {cand} (index {new_idx})")
                 else:
-                    print(f"   ⛔ Zablokowano jako duplikat (już istnieje w bazie)")
+                    print(f"   ⛔ Blocked as duplicate (already exists in database)")
             else:
                 handle_manual_entry(entry["index"], entry["embedding"], entry["face_crop"])
 

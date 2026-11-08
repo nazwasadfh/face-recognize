@@ -7,24 +7,24 @@ from insightface.app import FaceAnalysis
 from db import load_embeddings_matrix
 
 
-# --- Progi decyzyjne (takie same jak w recognize.py) ---
-DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => na 100% ta sama osoba, zielony
-AUTO_THRESHOLD = 0.30               # >=  => rozpoznane, zielony
-LOW_CONF_THRESHOLD = 0.10           # >= i < AUTO => możliwe, żółty
-UNKNOWN_THRESHOLD = 0.10            # < => nieznana, czerwony
+# --- Decision thresholds (same as recognize.py) ---
+DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => this is 100% the same person, green
+AUTO_THRESHOLD = 0.30               # >=  => recognized, green
+LOW_CONF_THRESHOLD = 0.10           # >= and < AUTO => possible, yellow
+UNKNOWN_THRESHOLD = 0.10            # < => unknown, red
 
 
 class SharedState:
-    """Dzielona pamięć między wątkiem kamery, przetwarzania i wyświetlania."""
+    """Shared memory between camera, processing, and display threads."""
     def __init__(self):
         self.lock = threading.Lock()
-        self.frame = None       # najświeższa klatka z kamery
-        self.results = []       # ostatnie wyniki rozpoznawania: (x1,y1,x2,y2,label,color)
+        self.frame = None       # freshest frame from camera
+        self.results = []       # last recognition results: (x1,y1,x2,y2,label,color)
         self.running = True
 
 
 def camera_loop(cap: cv2.VideoCapture, state: SharedState):
-    """Ciągle pobiera najnowszą klatkę z kamery – nigdy nie czeka na przetwarzanie."""
+    """Continuously fetches the newest frame from camera — never waits for processing."""
     while state.running:
         ret, frame = cap.read()
         if not ret:
@@ -37,7 +37,7 @@ def camera_loop(cap: cv2.VideoCapture, state: SharedState):
 
 def process_loop(state: SharedState, app: FaceAnalysis,
                  matrix: np.ndarray, meta: list, process_every: int):
-    """W tle wykonuje detekcję i rozpoznawanie na najświeższej klatce co N klatek."""
+    """Runs detection and recognition on the freshest frame every N frames."""
     has_db = len(matrix) > 0
     counter = 0
 
@@ -67,7 +67,7 @@ def process_loop(state: SharedState, app: FaceAnalysis,
             best_meta = None
 
             if has_db:
-                # cosine similarity dla wszystkich fingerprintów naraz (macierzowo)
+                # cosine similarity for all fingerprints at once (matrix op)
                 sims = matrix @ emb  # shape (N,)
                 best_idx = int(np.argmax(sims))
                 best_sim = float(sims[best_idx])
@@ -75,19 +75,19 @@ def process_loop(state: SharedState, app: FaceAnalysis,
 
             if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
                 info = best_meta["info"]
-                label = f"{info['name']} {info['surname']} ({best_sim:.2f}) [duplikat]"
-                color = (0, 255, 0)  # zielony
+                label = f"{info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
+                color = (0, 255, 0)  # green
             elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
                 info = best_meta["info"]
                 label = f"{info['name']} {info['surname']} ({best_sim:.2f})"
-                color = (0, 255, 0)  # zielony
+                color = (0, 255, 0)  # green
             elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
                 info = best_meta["info"]
                 label = f"? {info['name']} {info['surname']} ({best_sim:.2f})"
-                color = (0, 255, 255)  # żółty
+                color = (0, 255, 255)  # yellow
             else:
                 label = "unknown"
-                color = (0, 0, 255)  # czerwony
+                color = (0, 0, 255)  # red
 
             results.append((x1, y1, x2, y2, label, color))
 
@@ -97,22 +97,22 @@ def process_loop(state: SharedState, app: FaceAnalysis,
 
 
 def main():
-    # $1 = process_every (wymagane)
+    # $1 = process_every (required)
     if len(sys.argv) < 2:
-        print("Użycie: python live.py <co_ile_klatek> [kamera=0] [tolerancja=0.4]")
-        print("  <co_ile_klatek>  - wymagane, np. 2 oznacza przetwarzanie co 2 klatkę")
-        print("  [kamera]         - opcjonalnie, domyślnie 0")
-        print("  [tolerancja]     - opcjonalnie, domyślnie 0.4")
+        print("Usage: python live.py <process_every> [camera=0] [tolerance=0.4]")
+        print("  <process_every>  - required, e.g. 2 means process every 2nd frame")
+        print("  [camera]         - optional, default 0")
+        print("  [tolerance]      - optional, default 0.4")
         sys.exit(1)
 
     try:
         process_every = int(sys.argv[1])
     except ValueError:
-        print(f"❌ Błąd: '{sys.argv[1]}' nie jest liczbą całkowitą (co_ile_klatek).")
+        print(f"❌ Error: '{sys.argv[1]}' is not an integer (process_every).")
         sys.exit(1)
 
     if process_every < 1:
-        print("❌ Błąd: co_ile_klatek musi być >= 1.")
+        print("❌ Error: process_every must be >= 1.")
         sys.exit(1)
 
     camera_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
@@ -122,12 +122,12 @@ def main():
     app.prepare(ctx_id=0, det_size=(320, 320))
 
     matrix, meta = load_embeddings_matrix()
-    print(f"Wczytano {len(meta)} fingerprintów z bazy.")
-    print(f"Przetwarzanie co {process_every} klatki, det_size=320x320, kamera={camera_id}, tolerancja={tolerance}")
+    print(f"Loaded {len(meta)} fingerprints from database.")
+    print(f"Processing every {process_every} frames, det_size=320x320, camera={camera_id}, tolerance={tolerance}")
 
     cap = cv2.VideoCapture(camera_id)
     if not cap.isOpened():
-        print(f"❌ Nie można otworzyć kamery {camera_id}")
+        print(f"❌ Cannot open camera {camera_id}")
         return
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -140,7 +140,7 @@ def main():
     t_cam.start()
     t_proc.start()
 
-    print("Naciśnij 'q' lub ESC, aby wyjść.")
+    print("Press 'q' or ESC to exit.")
 
     try:
         while state.running:
@@ -158,7 +158,7 @@ def main():
                 cv2.putText(out, label, (x1, max(0, y1 - 10)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-            cv2.putText(out, f"co {process_every} klatki | q/ESC = wyjscie", (10, 30),
+            cv2.putText(out, f"every {process_every} frames | q/ESC = exit", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
             cv2.imshow("FaceSearch - Live Preview", out)

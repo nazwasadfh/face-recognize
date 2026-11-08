@@ -1,55 +1,75 @@
-# FaceSearch — lokalna baza rozpoznawania twarzy (CLI)
+# FaceSearch — local face recognition database (CLI)
 
-Wszystko działa na Twoim komputerze. Modele insightface pobierane są raz przy pierwszym uruchomieniu.
+Everything runs on your computer. InsightFace models are downloaded once on first run.
 
-## Struktura
+## Structure
 
 ```
 persons/<hash>/
-├── fingerprint.npy   # wektor cech twarzy (512 wymiarów, ArcFace)
-├── photo.png         # przycięte zdjęcie twarzy
-└── info.json         # {"name": ..., "surname": ..., "secondname": ...}
+├── fingerprints/
+│   ├── 0.npy   # first face embedding (ArcFace, 512 dims)
+│   ├── 1.npy   # next embeddings (added on confirmation)
+│   └── ...
+├── photo.png   # cropped face photo
+└── info.json   # {"name": ..., "surname": ..., "secondname": ..., "imported_from_input": [...]}
 ```
 
-## Instalacja
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Rozpoznawanie i dodawanie osób
+## Recognition and adding people
 
 ```bash
-python recognize.py zdjecie_testowe.jpg [tolerancja=0.4]
+python recognize.py test_photo.jpg [tolerance=0.4]
 ```
 
-- Program wykrywa twarze i porównuje z bazą.
-- Znane osoby są rozpoznawane po imieniu i nazwisku.
-- Nieznane twarze są oznaczone jako `unknown #0`, `unknown #1` itd.
-- Po zakończeniu analizy program pyta w konsoli `data for #N:` dla każdej nieznanej osoby.
-  - Wciśnij **Enter** — osoba pozostaje nieznana i nie jest zapisywana.
-  - Wpisz `imie nazwisko [drugieimie]` — osoba zostaje dodana do bazy (folder `persons/<hash>/` z `fingerprint.npy`, `photo.png` i `info.json`).
-- Wynik z ramkami zapisano do `result.jpg`.
+- The program detects faces and compares them with the database.
+- Known people are recognized by name and surname.
+- Unknown faces are labeled `unknown #0`, `unknown #1`, etc. (number = face index on the image).
+- After analysis, the program asks `data for #N:` for each unknown face.
+  - Press **Enter** — the person remains unknown and is not saved.
+  - Type `name surname [secondname]` — the person is added to the database (`persons/<hash>/` with `fingerprints/0.npy`, `photo.png`, and `info.json`).
+- If the best match is ≥ 0.30, the program asks `Is #N Name Surname? (Y/n)` — Enter = Y.
+  - If you answer **n**, the program asks `data for #N:` and checks if that person already exists in the database:
+    - If yes → adds a new fingerprint to the existing person.
+    - If no → creates a new person.
+- If the similarity is ≥ 0.99, the program reports it as a duplicate (green box, "this is 100% the same person") and does not ask to add a fingerprint.
+- Result with boxes is saved to `result.jpg` and opened with `eog` (if available).
 
-## Podgląd na żywo z kamery
+## Live camera preview
 
 ```bash
-python live.py [tolerancja=0.4] [kamera=0] [co_ile_klatek=2]
+python live.py <process_every> [camera=0] [tolerance=0.4]
 ```
 
-- Zielona ramka = rozpoznana osoba, czerwona = nieznana.
-- Wyjście: `q` lub `ESC`.
+- `<process_every>` **required** — process every N-th frame (e.g. `2` = every 2nd frame).
+- Green box = recognized person, red box = unknown.
+- Press `q` or ESC to exit.
 
-## Przykład
+## Importing data from input/
 
 ```bash
-# rozpoznaj i ewentualnie dodaj nieznane osoby
-python recognize.py test.jpg 0.4
-
-# podgląd na żywo
-python live.py 0.4 0 2
+python import_input.py
 ```
 
-## Uwagi prawne/etyczne
+- Reads all `input/*.json` files (each has `name: "First Last"`).
+- Looks for a person with that name and surname in `persons/*/info.json`.
+- If found → appends the JSON data to the person's `info.json` (under `imported_from_input`) and deletes the input file.
+- If not found → prints `not found $surname $name` and leaves the file in `input/`.
 
-Dane biometryczne (odciski twarzy) to dane szczególnej kategorii (np. RODO w UE). Nie dodawaj osób do bazy bez ich zgody.
+## Searching people by name
+
+```bash
+python search.py <name> [--exact]
+```
+
+- Partial case-insensitive match by default (searches name, surname, secondname).
+- `--exact` for exact name match (case-insensitive).
+- Prints `person_id` and the full `info.json` content for each match.
+
+## Legal / ethical notice
+
+Biometric data (face embeddings) are special category data (e.g. GDPR in the EU). Do not add people to the database without their consent.
