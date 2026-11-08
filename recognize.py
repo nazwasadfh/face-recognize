@@ -100,7 +100,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
 
     print(f"Detected {len(faces)} face(s).\n")
 
-    # All fingerprints from the database in one matrix — fast batch cosine similarity
+    # All fingerprints from the database in one matrix - fast batch cosine similarity
     matrix, meta = load_embeddings_matrix()
     has_db = len(matrix) > 0
 
@@ -135,7 +135,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
         if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
-            color = (0, 255, 0)  # green — correct result, this is 100% the same person
+            color = (0, 255, 0)  # green - correct result, this is 100% the same person
             entry["status"] = "duplicate_warning"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
@@ -187,7 +187,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
     # --- Interactive confirmation / adding new people ---
     for entry in results:
         if entry["status"] == "duplicate_warning":
-            # Does not ask, does not add fingerprint — only informs
+            # Does not ask, does not add fingerprint - only informs
             continue
 
         elif entry["status"] == "confirm_high":

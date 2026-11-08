@@ -77,7 +77,7 @@ def import_data_to_info(info_path: Path, input_data: dict):
 
 def main():
     if not INPUT_DIR.exists():
-        print(f"Folder {INPUT_DIR}/ does not exist — nothing to import.")
+        print(f"Folder {INPUT_DIR}/ does not exist - nothing to import.")
         return
 
     json_files = sorted(INPUT_DIR.glob("*.json"))
@@ -92,12 +92,12 @@ def main():
             with open(json_file, encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            print(f"❌ {json_file.name}: cannot load JSON ({e}) — keeping file.")
+            print(f"❌ {json_file.name}: cannot load JSON ({e}) - keeping file.")
             continue
 
         full_name = data.get("name") or data.get("full_name") or ""
         if not full_name:
-            print(f"⚠️  {json_file.name}: no 'name' field — keeping file.")
+            print(f"⚠️  {json_file.name}: no 'name' field - keeping file.")
             continue
 
         first_name, last_name = split_name(full_name)
@@ -105,7 +105,7 @@ def main():
         person_dir, info = find_person_by_name(first_name, last_name)
 
         if person_dir is None:
-            print(f"❌ not found {last_name} {first_name} — keeping file {json_file.name}")
+            print(f"❌ not found {last_name} {first_name} - keeping file {json_file.name}")
             continue
 
         # Found -> append data to info.json and delete the file

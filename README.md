@@ -1,6 +1,6 @@
-# FaceSearch — local face recognition database (CLI)
+# FaceSearch - local face recognition database (CLI)
 
-FaceSearch is a local, private face recognition system. Think of it as your own personal police database, but running entirely on your own computer — nothing is ever sent to the cloud.
+FaceSearch is a local, private face recognition system. Think of it as your own personal police database, but running entirely on your own computer - nothing is ever sent to the cloud.
 
 You add people by photographing them. The program detects the face, crops it, and saves a unique "face fingerprint" along with the person's name and a cropped photo in a folder named with a unique hash.
 
@@ -36,9 +36,9 @@ python recognize.py test_photo.jpg [tolerance=0.4]
 - Known people are recognized by name and surname.
 - Unknown faces are labeled `unknown #0`, `unknown #1`, etc. (number = face index on the image).
 - After analysis, the program asks `data for #N:` for each unknown face.
-  - Press **Enter** — the person remains unknown and is not saved.
-  - Type `name surname [secondname]` — the person is added to the database (`persons/<hash>/` with `fingerprints/0.npy`, `photo.png`, and `info.json`).
-- If the best match is ≥ 0.30, the program asks `Is #N Name Surname? (Y/n)` — Enter = Y.
+  - Press **Enter** - the person remains unknown and is not saved.
+  - Type `name surname [secondname]` - the person is added to the database (`persons/<hash>/` with `fingerprints/0.npy`, `photo.png`, and `info.json`).
+- If the best match is ≥ 0.30, the program asks `Is #N Name Surname? (Y/n)` - Enter = Y.
   - If you answer **n**, the program asks `data for #N:` and checks if that person already exists in the database:
     - If yes → adds a new fingerprint to the existing person.
     - If no → creates a new person.
@@ -51,7 +51,7 @@ python recognize.py test_photo.jpg [tolerance=0.4]
 python live.py <process_every> [camera=0] [tolerance=0.4]
 ```
 
-- `<process_every>` **required** — process every N-th frame (e.g. `2` = every 2nd frame).
+- `<process_every>` **required** - process every N-th frame (e.g. `2` = every 2nd frame).
 - Green box = recognized person, red box = unknown.
 - Press `q` or ESC to exit.
 

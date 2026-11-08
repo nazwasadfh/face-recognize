@@ -24,7 +24,7 @@ class SharedState:
 
 
 def camera_loop(cap: cv2.VideoCapture, state: SharedState):
-    """Continuously fetches the newest frame from camera — never waits for processing."""
+    """Continuously fetches the newest frame from camera - never waits for processing."""
     while state.running:
         ret, frame = cap.read()
         if not ret:
