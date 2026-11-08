@@ -37,7 +37,7 @@ def camera_loop(cap: cv2.VideoCapture, state: SharedState):
 
 def process_loop(state: SharedState, app: FaceAnalysis,
                  matrix: np.ndarray, meta: list, process_every: int):
-    """W tle wykonuje detekcję i rozpoznawanie na najświeższej klatce."""
+    """W tle wykonuje detekcję i rozpoznawanie na najświeższej klatce co N klatek."""
     has_db = len(matrix) > 0
     counter = 0
 
@@ -97,15 +97,33 @@ def process_loop(state: SharedState, app: FaceAnalysis,
 
 
 def main():
-    tolerance = float(sys.argv[1]) if len(sys.argv) > 1 else 0.4
+    # $1 = process_every (wymagane)
+    if len(sys.argv) < 2:
+        print("Użycie: python live.py <co_ile_klatek> [kamera=0] [tolerancja=0.4]")
+        print("  <co_ile_klatek>  - wymagane, np. 2 oznacza przetwarzanie co 2 klatkę")
+        print("  [kamera]         - opcjonalnie, domyślnie 0")
+        print("  [tolerancja]     - opcjonalnie, domyślnie 0.4")
+        sys.exit(1)
+
+    try:
+        process_every = int(sys.argv[1])
+    except ValueError:
+        print(f"❌ Błąd: '{sys.argv[1]}' nie jest liczbą całkowitą (co_ile_klatek).")
+        sys.exit(1)
+
+    if process_every < 1:
+        print("❌ Błąd: co_ile_klatek musi być >= 1.")
+        sys.exit(1)
+
     camera_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    process_every = int(sys.argv[3]) if len(sys.argv) > 3 else 2
+    tolerance = float(sys.argv[3]) if len(sys.argv) > 3 else 0.4
 
     app = FaceAnalysis(name="buffalo_l", root=".", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(320, 320))
 
     matrix, meta = load_embeddings_matrix()
     print(f"Wczytano {len(meta)} fingerprintów z bazy.")
+    print(f"Przetwarzanie co {process_every} klatki, det_size=320x320, kamera={camera_id}, tolerancja={tolerance}")
 
     cap = cv2.VideoCapture(camera_id)
     if not cap.isOpened():
