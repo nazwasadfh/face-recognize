@@ -1,5 +1,11 @@
 # FaceSearch — local face recognition database (CLI)
 
+FaceSearch is a local, private face recognition system. Think of it as your own personal police database, but running entirely on your own computer — nothing is ever sent to the cloud.
+
+You add people by photographing them. The program detects the face, crops it, and saves a unique "face fingerprint" along with the person's name and a cropped photo in a folder named with a unique hash.
+
+Later, you can show it a new photo (or use your webcam live) and it will tell you who is in the picture by comparing faces with your local database. If it doesn't recognize someone, you can add them by typing their name.
+
 Everything runs on your computer. InsightFace models are downloaded once on first run.
 
 ## Structure
