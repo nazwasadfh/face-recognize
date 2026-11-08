@@ -61,7 +61,19 @@ python recognize.py test_photo.jpg [tolerance=0.4] [--device cuda|cpu|auto]
     - If yes → adds a new fingerprint to the existing person.
     - If no → creates a new person.
 - If the similarity is ≥ 0.99, the program reports it as a duplicate (green box, "this is 100% the same person") and does not ask to add a fingerprint.
-- Result with boxes is saved to `result.jpg` and opened with `eog` (if available).
+- Result with boxes is saved to `out/result.jpg` and opened with `eog` (if available).
+
+### Video recognition
+
+```bash
+python recognize.py <video.mp4> <process_every> [--device cuda|cpu|auto]
+```
+
+- `<video.mp4>` - path to the video file (`.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`).
+- `<process_every>` - required, process every N-th frame (e.g. `2` = every 2nd frame), same as in `live.py`.
+- `--device` selects inference device: `cuda` (GPU, default), `cpu`, or `auto` (GPU if available).
+- No interactive prompts - detection only, like live preview.
+- Result with boxes is saved to `out/result.mp4` (folder `out/` is created automatically).
 
 ## Live camera preview
 

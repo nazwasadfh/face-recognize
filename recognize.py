@@ -3,6 +3,7 @@ import argparse
 import cv2
 import subprocess
 import numpy as np
+from pathlib import Path
 from insightface.app import FaceAnalysis
 from db import (
     load_embeddings_matrix,
@@ -11,6 +12,12 @@ from db import (
     find_person_by_name,
     clean_duplicates,
 )
+
+VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+
+
+def is_video(path: str) -> bool:
+    return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
 # --- Decision thresholds ---
@@ -228,15 +235,18 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
         results.append(entry)
 
-    cv2.imwrite("result.jpg", out)
-    print("\nResult with boxes saved to result.jpg")
+    out_dir = Path("out")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    result_path = out_dir / "result.jpg"
+    cv2.imwrite(str(result_path), out)
+    print(f"\nResult with boxes saved to {result_path}")
 
     # Open result with eog (Eye of GNOME) if available
     try:
-        subprocess.Popen(["eog", "result.jpg"],
+        subprocess.Popen(["eog", str(result_path)],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:
-        print("eog not found – open result.jpg with your own image viewer.")
+        print("eog not found – open the result image with your own image viewer.")
 
     # --- Interactive confirmation / adding new people ---
     for entry in results:
@@ -277,17 +287,122 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
             handle_manual_entry(entry["unknown_index"], entry["embedding"], entry["face_crop"])
 
 
+def recognize_from_video(video_path: str, process_every: int, device=None):
+    """
+    Recognizes faces in a video file, processing every N-th frame,
+    and saves the annotated result to out/result.mp4.
+    No interactive prompts - detection only, like live preview.
+    """
+    removed = clean_duplicates()
+    if removed:
+        print(f"info: Removed {removed} duplicate fingerprint(s) from database.\n")
+
+    app, used_providers = create_app(device or "auto", (640, 640))
+    print(f"info: Using inference providers: {used_providers}")
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"error: Cannot open video: {video_path}")
+        return
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 25.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    out_dir = Path("out")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_path = out_dir / "result.mp4"
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+
+    matrix, meta = load_embeddings_matrix()
+    has_db = len(matrix) > 0
+
+    counter = 0
+    last_boxes = []  # (x1, y1, x2, y2, label, color)
+
+    print(f"Processing video: {video_path}")
+    print(f"Every {process_every} frames, det_size=640x640, output: {output_path}")
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        counter += 1
+
+        if counter % process_every == 0:
+            faces = app.get(frame)
+            boxes = []
+
+            for face in faces:
+                x1, y1, x2, y2 = face.bbox[:4].astype(int)
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
+
+                emb = face.normed_embedding.astype(np.float32)
+
+                best_sim = -1.0
+                best_meta = None
+                if has_db:
+                    sims = matrix @ emb
+                    best_idx = int(np.argmax(sims))
+                    best_sim = float(sims[best_idx])
+                    best_meta = meta[best_idx]
+
+                if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
+                    info = best_meta["info"]
+                    label = f"{info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
+                    color = (0, 255, 0)  # green
+                elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
+                    info = best_meta["info"]
+                    label = f"{info['name']} {info['surname']} ({best_sim:.2f})"
+                    color = (0, 255, 0)  # green
+                elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
+                    info = best_meta["info"]
+                    label = f"? {info['name']} {info['surname']} ({best_sim:.2f})"
+                    color = (0, 255, 255)  # yellow
+                else:
+                    label = "unknown"
+                    color = (0, 0, 255)  # red
+
+                boxes.append((x1, y1, x2, y2, label, color))
+
+            last_boxes = boxes
+        else:
+            boxes = last_boxes
+
+        out = frame.copy()
+        for (x1, y1, x2, y2, label, color) in boxes:
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(out, label, (x1, max(0, y1 - 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+        cv2.putText(out, f"every {process_every} frames", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        writer.write(out)
+
+    cap.release()
+    writer.release()
+    print(f"\nVideo with boxes saved to {output_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Recognize faces in an image and optionally add new people to the database."
+        description="Recognize faces in an image or video file."
     )
-    parser.add_argument("image_path", help="Path to the image file to recognize.")
+    parser.add_argument("input_path", help="Path to the image or video file to recognize.")
     parser.add_argument(
-        "tolerance",
+        "second_arg",
         nargs="?",
-        type=float,
-        default=0.4,
-        help="Kept for CLI compatibility (internal thresholds are used). Default: 0.4.",
+        type=str,
+        default=None,
+        help="For images: tolerance (optional, default 0.4). "
+             "For video: process_every (required, e.g. 2 = every 2nd frame).",
     )
     parser.add_argument(
         "--device",
@@ -297,7 +412,23 @@ def main():
     )
     args = parser.parse_args()
 
-    recognize_from_file(args.image_path, args.tolerance, device=args.device)
+    if is_video(args.input_path):
+        if args.second_arg is None:
+            print("error: process_every is required for video input.")
+            print("  Usage: python recognize.py <video.mp4> <process_every> [--device cuda|cpu|auto]")
+            sys.exit(1)
+        try:
+            process_every = int(args.second_arg)
+        except ValueError:
+            print(f"error: '{args.second_arg}' is not an integer (process_every).")
+            sys.exit(1)
+        if process_every < 1:
+            print("error: process_every must be >= 1.")
+            sys.exit(1)
+        recognize_from_video(args.input_path, process_every, device=args.device)
+    else:
+        tolerance = float(args.second_arg) if args.second_arg is not None else 0.4
+        recognize_from_file(args.input_path, tolerance, device=args.device)
 
 
 if __name__ == "__main__":
