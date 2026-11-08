@@ -1,4 +1,4 @@
 insightface
-onnxruntime
+onnxruntime-gpu
 opencv-python
 numpy

@@ -1,10 +1,12 @@
 import sys
+import argparse
 import cv2
 import numpy as np
 import threading
 import time
 from insightface.app import FaceAnalysis
 from db import load_embeddings_matrix
+from recognize import create_app
 
 
 # --- Decision thresholds (same as recognize.py) ---
@@ -97,29 +99,46 @@ def process_loop(state: SharedState, app: FaceAnalysis,
 
 
 def main():
-    # $1 = process_every (required)
-    if len(sys.argv) < 2:
-        print("Usage: python live.py <process_every> [camera=0] [tolerance=0.4]")
-        print("  <process_every>  - required, e.g. 2 means process every 2nd frame")
-        print("  [camera]         - optional, default 0")
-        print("  [tolerance]      - optional, default 0.4")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Live face recognition preview from a webcam."
+    )
+    parser.add_argument(
+        "process_every",
+        type=int,
+        help="Process every N-th frame (e.g. 2 = every 2nd frame). Must be >= 1.",
+    )
+    parser.add_argument(
+        "camera",
+        nargs="?",
+        type=int,
+        default=0,
+        help="Camera device id. Default: 0.",
+    )
+    parser.add_argument(
+        "tolerance",
+        nargs="?",
+        type=float,
+        default=0.4,
+        help="Kept for CLI compatibility (internal thresholds are used). Default: 0.4.",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cuda", "cpu"],
+        default="cuda",
+        help="Inference device: 'cuda' (GPU, default), 'cpu', or 'auto' (GPU if available).",
+    )
+    args = parser.parse_args()
 
-    try:
-        process_every = int(sys.argv[1])
-    except ValueError:
-        print(f"error: '{sys.argv[1]}' is not an integer (process_every).")
-        sys.exit(1)
-
-    if process_every < 1:
+    if args.process_every < 1:
         print("error: process_every must be >= 1.")
         sys.exit(1)
 
-    camera_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    tolerance = float(sys.argv[3]) if len(sys.argv) > 3 else 0.4
+    process_every = args.process_every
+    camera_id = args.camera
+    tolerance = args.tolerance
 
-    app = FaceAnalysis(name="buffalo_l", root=".", providers=["CPUExecutionProvider"])
-    app.prepare(ctx_id=0, det_size=(320, 320))
+    app, used_providers = create_app(args.device, (320, 320))
+    print(f"info: Using inference providers: {used_providers}")
 
     matrix, meta = load_embeddings_matrix()
     print(f"Loaded {len(meta)} fingerprints from database.")

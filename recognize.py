@@ -1,4 +1,5 @@
 import sys
+import argparse
 import cv2
 import subprocess
 import numpy as np
@@ -17,6 +18,57 @@ AUTO_THRESHOLD = 0.30          # >=  => ask Y/n (Enter = Y), add fingerprint to 
 LOW_CONF_THRESHOLD = 0.10      # < AUTO_THRESHOLD but >= LOW => ask Y/n with warning (Enter = N)
 UNKNOWN_THRESHOLD = 0.10       # <  => unknown #N, ask user for data
 DUPLICATE_WARNING_THRESHOLD = 0.99  # >= => result 1.00, this is 100% the same person, do not add duplicate
+
+
+def select_providers(device: str) -> list:
+    """
+    Returns the list of ONNXRT providers for FaceAnalysis depending on the chosen device.
+    'cuda'  -> CUDAExecutionProvider (requires cuDNN; falls back in create_app if missing)
+    'cpu'   -> CPUExecutionProvider only
+    'auto'  -> CUDA if available, otherwise CPU
+    """
+    import onnxruntime as ort
+    available = ort.get_available_providers()
+
+    if device == "cpu":
+        return ["CPUExecutionProvider"]
+
+    if device == "cuda":
+        if "CUDAExecutionProvider" in available:
+            return ["CUDAExecutionProvider"]
+        print("warning: CUDAExecutionProvider not available in onnxruntime, using CPU.")
+        return ["CPUExecutionProvider"]
+
+    # auto
+    if "CUDAExecutionProvider" in available:
+        return ["CUDAExecutionProvider"]
+    return ["CPUExecutionProvider"]
+
+
+def create_app(device: str, det_size: tuple) -> tuple:
+    """
+    Creates FaceAnalysis with the chosen device. If CUDA initialization fails
+    (e.g. missing cuDNN library), automatically falls back to CPU with a warning.
+    Returns (app, providers_used).
+    """
+    import numpy as np
+    providers = select_providers(device)
+    try:
+        app = FaceAnalysis(name="buffalo_l", root=".", providers=providers)
+        app.prepare(ctx_id=0, det_size=det_size)
+        # Force early CUDA initialization (load cuDNN kernels)
+        # on a blank image to detect missing libraries before the first real image.
+        _ = app.get(np.zeros((det_size[1], det_size[0], 3), dtype=np.uint8))
+        return app, providers
+    except Exception as e:
+        if providers != ["CPUExecutionProvider"] and "CUDAExecutionProvider" in providers:
+            print(f"warning: CUDA initialization failed ({e}). Falling back to CPU.")
+            providers = ["CPUExecutionProvider"]
+            app = FaceAnalysis(name="buffalo_l", root=".", providers=providers)
+            app.prepare(ctx_id=0, det_size=det_size)
+            _ = app.get(np.zeros((det_size[1], det_size[0], 3), dtype=np.uint8))
+            return app, providers
+        raise
 
 
 def ask_confirmation(prompt: str, default_y: bool) -> bool:
@@ -72,21 +124,23 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
         print(f"   info: Created new person {name} {surname} {secondname}: {person_id}")
 
 
-def recognize_from_file(image_path: str, tolerance: float = 0.4):
+def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
     """
     Recognizes faces in an image and allows interactively adding new fingerprints
     to existing persons or creating new persons from unknown faces.
 
     `tolerance` is kept for CLI compatibility,
     but internally the thresholds above are used.
+
+    `device` selects the inference device: 'cuda', 'cpu', or 'auto' (default).
     """
     # Automatic duplicate cleanup on start
     removed = clean_duplicates()
     if removed:
         print(f"info: Removed {removed} duplicate fingerprint(s) from database.\n")
 
-    app = FaceAnalysis(name="buffalo_l", root=".", providers=["CPUExecutionProvider"])
-    app.prepare(ctx_id=0, det_size=(640, 640))
+    app, used_providers = create_app(device or "auto", (640, 640))
+    print(f"info: Using inference providers: {used_providers}")
 
     img = cv2.imread(image_path)
     if img is None:
@@ -223,6 +277,28 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             handle_manual_entry(entry["unknown_index"], entry["embedding"], entry["face_crop"])
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="Recognize faces in an image and optionally add new people to the database."
+    )
+    parser.add_argument("image_path", help="Path to the image file to recognize.")
+    parser.add_argument(
+        "tolerance",
+        nargs="?",
+        type=float,
+        default=0.4,
+        help="Kept for CLI compatibility (internal thresholds are used). Default: 0.4.",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cuda", "cpu"],
+        default="cuda",
+        help="Inference device: 'cuda' (GPU, default), 'cpu', or 'auto' (GPU if available).",
+    )
+    args = parser.parse_args()
+
+    recognize_from_file(args.image_path, args.tolerance, device=args.device)
+
+
 if __name__ == "__main__":
-    tol = float(sys.argv[2]) if len(sys.argv) > 2 else 0.4
-    recognize_from_file(sys.argv[1], tol)
+    main()
