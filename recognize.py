@@ -41,7 +41,7 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
     """
     user_input = input(f"data for #{index}: ").strip()
     if not user_input:
-        print(f"   ⏭️  Skipped #{index}")
+        print(f"   skip: Skipped #{index}")
         return
 
     parts = user_input.split()
@@ -50,7 +50,7 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
     secondname = parts[2] if len(parts) > 2 else ""
 
     if not name and not surname:
-        print(f"   ⏭️  Skipped #{index} (no name and surname)")
+        print(f"   skip: Skipped #{index} (no name and surname)")
         return
 
     existing_id = find_person_by_name(name, surname)
@@ -58,9 +58,9 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
         new_idx = add_fingerprint(existing_id, embedding, face_crop,
                                   check_duplicates=True)
         if new_idx is not None:
-            print(f"   ✅ Added new fingerprint to existing person {name} {surname} (index {new_idx})")
+            print(f"   info: Added new fingerprint to existing person {name} {surname} (index {new_idx})")
         else:
-            print(f"   ⛔ Blocked as duplicate (already exists in database)")
+            print(f"   error: Blocked as duplicate (already exists in database)")
     else:
         person_id = save_person(
             name=name,
@@ -69,7 +69,7 @@ def handle_manual_entry(index: int, embedding: np.ndarray, face_crop: np.ndarray
             embedding=embedding,
             face_image_bgr=face_crop,
         )
-        print(f"   ✅ Created new person {name} {surname} {secondname}: {person_id}")
+        print(f"   info: Created new person {name} {surname} {secondname}: {person_id}")
 
 
 def recognize_from_file(image_path: str, tolerance: float = 0.4):
@@ -83,19 +83,19 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
     # Automatic duplicate cleanup on start
     removed = clean_duplicates()
     if removed:
-        print(f"🧹 Removed {removed} duplicate fingerprint(s) from database.\n")
+        print(f"info: Removed {removed} duplicate fingerprint(s) from database.\n")
 
     app = FaceAnalysis(name="buffalo_l", root=".", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=0, det_size=(640, 640))
 
     img = cv2.imread(image_path)
     if img is None:
-        print(f"❌ Cannot load image: {image_path}")
+        print(f"error: Cannot load image: {image_path}")
         return
 
     faces = app.get(img)
     if not faces:
-        print("❌ No faces detected in the image.")
+        print("error: No faces detected in the image.")
         return
 
     print(f"Detected {len(faces)} face(s).\n")
@@ -140,7 +140,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
             entry["candidate_name"] = f"{info['name']} {info['surname']}"
-            print(f"✅ #{i}: {info['name']} {info['surname']} ({best_sim:.2f}) – duplicate, this is 100% the same person")
+            print(f"info: #{i}: {info['name']} {info['surname']} ({best_sim:.2f}) – duplicate, this is 100% the same person")
 
         elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
@@ -150,7 +150,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
             entry["candidate_name"] = f"{info['name']} {info['surname']}"
-            print(f"✅ {label}")
+            print(f"info: {label}")
 
         elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
@@ -160,14 +160,14 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
             entry["candidate_name"] = f"{info['name']} {info['surname']}"
-            print(f"⚠️  {label}")
+            print(f"warning: {label}")
 
         else:
             label = f"#{i}: unknown #{i}"
             color = (0, 0, 255)  # red
             entry["status"] = "unknown"
             entry["unknown_index"] = i
-            print(f"❌ {label}")
+            print(f"error: {label}")
 
         cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
         cv2.putText(out, label, (x1, max(0, y1 - 10)),
@@ -198,9 +198,9 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
                 new_idx = add_fingerprint(pid, entry["embedding"], entry["face_crop"],
                                           check_duplicates=True)
                 if new_idx is not None:
-                    print(f"   ✅ Added new fingerprint to {cand} (index {new_idx})")
+                    print(f"   info: Added new fingerprint to {cand} (index {new_idx})")
                 else:
-                    print(f"   ⛔ Blocked as duplicate (already exists in database)")
+                    print(f"   error: Blocked as duplicate (already exists in database)")
             else:
                 handle_manual_entry(entry["index"], entry["embedding"], entry["face_crop"])
 
@@ -208,14 +208,14 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4):
             pid = entry["person_id"]
             cand = entry["candidate_name"]
             sim = entry["sim"]
-            print(f"⚠️  Confidence was not high ({sim:.2f}).")
+            print(f"warning: Confidence was not high ({sim:.2f}).")
             if ask_confirmation(f"Is #{entry['index']} {cand}?", default_y=False):
                 new_idx = add_fingerprint(pid, entry["embedding"], entry["face_crop"],
                                           check_duplicates=True)
                 if new_idx is not None:
-                    print(f"   ✅ Added new fingerprint to {cand} (index {new_idx})")
+                    print(f"   info: Added new fingerprint to {cand} (index {new_idx})")
                 else:
-                    print(f"   ⛔ Blocked as duplicate (already exists in database)")
+                    print(f"   error: Blocked as duplicate (already exists in database)")
             else:
                 handle_manual_entry(entry["index"], entry["embedding"], entry["face_crop"])
 

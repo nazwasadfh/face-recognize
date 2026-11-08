@@ -108,11 +108,11 @@ def main():
     try:
         process_every = int(sys.argv[1])
     except ValueError:
-        print(f"❌ Error: '{sys.argv[1]}' is not an integer (process_every).")
+        print(f"error: '{sys.argv[1]}' is not an integer (process_every).")
         sys.exit(1)
 
     if process_every < 1:
-        print("❌ Error: process_every must be >= 1.")
+        print("error: process_every must be >= 1.")
         sys.exit(1)
 
     camera_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
@@ -127,7 +127,7 @@ def main():
 
     cap = cv2.VideoCapture(camera_id)
     if not cap.isOpened():
-        print(f"❌ Cannot open camera {camera_id}")
+        print(f"error: Cannot open camera {camera_id}")
         return
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)

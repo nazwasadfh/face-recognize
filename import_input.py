@@ -92,12 +92,12 @@ def main():
             with open(json_file, encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            print(f"❌ {json_file.name}: cannot load JSON ({e}) - keeping file.")
+            print(f"error: {json_file.name}: cannot load JSON ({e}) - keeping file.")
             continue
 
         full_name = data.get("name") or data.get("full_name") or ""
         if not full_name:
-            print(f"⚠️  {json_file.name}: no 'name' field - keeping file.")
+            print(f"warning: {json_file.name}: no 'name' field - keeping file.")
             continue
 
         first_name, last_name = split_name(full_name)
@@ -105,14 +105,14 @@ def main():
         person_dir, info = find_person_by_name(first_name, last_name)
 
         if person_dir is None:
-            print(f"❌ not found {last_name} {first_name} - keeping file {json_file.name}")
+            print(f"error: not found {last_name} {first_name} - keeping file {json_file.name}")
             continue
 
         # Found -> append data to info.json and delete the file
         info_path = person_dir / "info.json"
         import_data_to_info(info_path, data)
         json_file.unlink()
-        print(f"✅ {last_name} {first_name}: data appended to {person_dir.name}/info.json, deleted {json_file.name}")
+        print(f"info: {last_name} {first_name}: data appended to {person_dir.name}/info.json, deleted {json_file.name}")
 
     print("\nDone.")
 
