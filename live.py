@@ -78,11 +78,11 @@ def process_loop(state: SharedState, app: FaceAnalysis,
             if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
                 info = best_meta["info"]
                 label = f"{info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
-                color = (255, 171, 0)  # blue
+                color = (0, 0, 255)  # red
             elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
                 info = best_meta["info"]
                 label = f"{info['name']} {info['surname']} ({best_sim:.2f})"
-                color = (255, 171, 0)  # blue
+                color = (0, 0, 255)  # red
             elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
                 info = best_meta["info"]
                 label = f"? {info['name']} {info['surname']} ({best_sim:.2f})"
