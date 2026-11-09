@@ -60,7 +60,7 @@ python recognize.py test_photo.jpg [tolerance=0.4] [--device cuda|cpu|auto]
   - If you answer **n**, the program asks `data for #N:` and checks if that person already exists in the database:
     - If yes → adds a new fingerprint to the existing person.
     - If no → creates a new person.
-- If the similarity is ≥ 0.99, the program reports it as a duplicate (green box, "this is 100% the same person") and does not ask to add a fingerprint.
+- If the similarity is ≥ 0.99, the program reports it as a duplicate (red box, "this is 100% the same person") and does not ask to add a fingerprint.
 - Result with boxes is saved to `out/result.jpg` and opened with `eog` (if available).
 
 ### Video recognition
@@ -85,7 +85,7 @@ python recognize.py <video.mp4> <process_every> [--device cuda|cpu|auto]
 
 - Takes a screenshot of all monitors via **grim** (Wayland-native), saves it to `/tmp/screen-<hash>.png`.
 - Detects faces and draws colored boxes directly on screen via **quickshell/QML** with `WlrLayershell` (Wayland layer-shell overlay) — a transparent layer on top of everything, **not a regular window**.
-- Green = recognized person, yellow = low confidence, red = unknown.
+- Red = recognized person, orange = low confidence, blue = unknown.
 - No interactive prompts - detection runs once. The overlay stays visible but does not block the computer; you can keep using the desktop underneath.
 - Press **Escape** to close the overlay, or use `-r` to remove it programmatically (sends SIGTERM to the running `quickshell` instance).
 - `--device` selects inference device: `cuda` (GPU, default), `cpu`, or `auto` (GPU if available).
@@ -98,7 +98,7 @@ python live.py <process_every> [camera=0] [tolerance=0.4] [--device cuda|cpu|aut
 ```
 
 - `<process_every>` **required** - process every N-th frame (e.g. `2` = every 2nd frame).
-- Green box = recognized person, red box = unknown.
+- Red box = recognized person, orange box = low confidence, blue box = unknown.
 - Press `q` or ESC to exit.
 - `--device` selects inference device: `cuda` (GPU, default), `cpu`, or `auto` (GPU if available). Falls back to CPU automatically if CUDA/cuDNN is unavailable.
 

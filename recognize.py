@@ -196,7 +196,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
         if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
-            color = (0, 255, 0)  # green - correct result, this is 100% the same person
+            color = (255, 171, 0)  # blue - correct result, this is 100% the same person
             entry["status"] = "duplicate_warning"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
@@ -206,7 +206,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
         elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: {info['name']} {info['surname']} ({best_sim:.2f})"
-            color = (0, 255, 0)  # green
+            color = (255, 171, 0)  # blue
             entry["status"] = "confirm_high"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
@@ -216,7 +216,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
         elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
             info = best_meta["info"]
             label = f"#{i}: ? {info['name']} {info['surname']} ({best_sim:.2f})"
-            color = (0, 255, 255)  # yellow
+            color = (0, 154, 255)  # orange
             entry["status"] = "confirm_low"
             entry["person_id"] = best_meta["person_id"]
             entry["sim"] = best_sim
@@ -225,7 +225,7 @@ def recognize_from_file(image_path: str, tolerance: float = 0.4, device=None):
 
         else:
             label = f"#{i}: unknown #{i}"
-            color = (0, 0, 255)  # red
+            color = (255, 171, 0)  # blue
             entry["status"] = "unknown"
             entry["unknown_index"] = i
             print(f"error: {label}")
@@ -356,18 +356,18 @@ def recognize_from_video(video_path: str, process_every: int, device=None):
                 if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
                     info = best_meta["info"]
                     label = f"{info['name']} {info['surname']} ({best_sim:.2f}) [duplicate]"
-                    color = (0, 255, 0)  # green
+                    color = (255, 171, 0)  # blue
                 elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
                     info = best_meta["info"]
                     label = f"{info['name']} {info['surname']} ({best_sim:.2f})"
-                    color = (0, 255, 0)  # green
+                    color = (255, 171, 0)  # blue
                 elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
                     info = best_meta["info"]
                     label = f"? {info['name']} {info['surname']} ({best_sim:.2f})"
-                    color = (0, 255, 255)  # yellow
+                    color = (0, 154, 255)  # orange
                 else:
                     label = "unknown"
-                    color = (0, 0, 255)  # red
+                    color = (255, 171, 0)  # blue
 
                 boxes.append((x1, y1, x2, y2, label, color))
 
