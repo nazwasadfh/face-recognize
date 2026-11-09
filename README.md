@@ -75,6 +75,22 @@ python recognize.py <video.mp4> <process_every> [--device cuda|cpu|auto]
 - No interactive prompts - detection only, like live preview.
 - Result with boxes is saved to `out/result.mp4` (folder `out/` is created automatically).
 
+### Screen recognition overlay
+
+```bash
+./screen-recognize              # take screenshot, detect faces, draw overlay
+./screen-recognize -r           # remove existing overlay
+./screen-recognize --device cpu # force CPU inference
+```
+
+- Takes a screenshot of all monitors via **grim** (Wayland-native), saves it to `/tmp/screen-<hash>.png`.
+- Detects faces and draws colored boxes directly on screen via **quickshell/QML** with `WlrLayershell` (Wayland layer-shell overlay) — a transparent layer on top of everything, **not a regular window**.
+- Green = recognized person, yellow = low confidence, red = unknown.
+- No interactive prompts - detection runs once. The overlay stays visible but does not block the computer; you can keep using the desktop underneath.
+- Press **Escape** to close the overlay, or use `-r` to remove it programmatically (sends SIGTERM to the running `quickshell` instance).
+- `--device` selects inference device: `cuda` (GPU, default), `cpu`, or `auto` (GPU if available).
+- Requires: `grim`, `quickshell` (available on this Hyprland/Wayland system).
+
 ## Live camera preview
 
 ```bash

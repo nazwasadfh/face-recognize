@@ -2,3 +2,8 @@ insightface
 onnxruntime-gpu
 opencv-python
 numpy
+
+# System dependencies (not pip-installable):
+#   grim      - Wayland-native screenshot
+#   quickshell - QML overlay via WlrLayershell
+#   hyprctl   - optional, for Hyprland window management

@@ -8,8 +8,10 @@ result.jpg
 .env
 persons/
 snap.jpg
+snap.mp4
 models/
 makemeaphoto
+makemeavideo
 photos/
 input/
 out/

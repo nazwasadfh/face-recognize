@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""
+screen-recognize: take a screenshot (grim), detect faces, draw overlay boxes on screen via quickshell/WlrLayershell.
+
+Usage:
+    ./screen-recognize              # take screenshot, detect faces, draw overlay
+    ./screen-recognize -r           # remove existing overlay
+    ./screen-recognize --device cpu # force CPU inference
+
+Takes a screenshot of all monitors via grim (Wayland-native), detects faces,
+and draws colored boxes directly on screen via quickshell/QML WlrLayershell
+overlay - a transparent layer on top of everything, not a regular window.
+The desktop remains visible and usable underneath.
+"""
+
+import sys
+import os
+import signal
+import subprocess
+import argparse
+import uuid
+import tempfile
+from pathlib import Path
+
+import cv2
+import numpy as np
+from insightface.app import FaceAnalysis
+
+from recognize import create_app, load_embeddings_matrix
+
+PID_FILE = Path("/tmp/screen-recognize.pid")
+QML_FILE = Path("/tmp/screen-recognize-overlay.qml")
+
+# Thresholds (same as recognize.py / live.py)
+DUPLICATE_WARNING_THRESHOLD = 0.99
+AUTO_THRESHOLD = 0.30
+LOW_CONF_THRESHOLD = 0.10
+
+# BGR colors (stored as BGR, converted to RGB hex in bgr_to_qml_hex)
+# recognized = red (255,0,0), low = orange (255,154,0), unknown = blue (0,171,255)
+COLOR_RECOGNIZED = (0, 0, 255)       # BGR → QML hex #ff0000 = red
+COLOR_LOW = (0, 154, 255)            # BGR → QML hex #ff9a00 = orange
+COLOR_UNKNOWN = (255, 171, 0)        # BGR → QML hex #00abff = blue
+
+
+def bgr_to_qml_hex(color):
+    """Convert BGR tuple to QML hex color #RRGGBB."""
+    return f"#{color[2]:02x}{color[1]:02x}{color[0]:02x}"
+
+
+def is_running():
+    """Return PID if screen-recognize overlay is running, else None."""
+    if not PID_FILE.exists():
+        return None
+    try:
+        pid = int(PID_FILE.read_text().strip())
+        os.kill(pid, 0)
+        return pid
+    except (ValueError, ProcessLookupError, PermissionError):
+        PID_FILE.unlink(missing_ok=True)
+        return None
+
+
+def take_screenshot():
+    """Take screenshot via grim (Wayland-native), save to /tmp, return (img, path)."""
+    shot_name = f"screen-{uuid.uuid4().hex[:8]}.png"
+    shot_path = Path("/tmp") / shot_name
+
+    result = subprocess.run(
+        ["grim", str(shot_path)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"error: grim failed: {result.stderr}")
+        return None, None
+
+    img = cv2.imread(str(shot_path))
+    if img is None:
+        print(f"error: Cannot read screenshot: {shot_path}")
+        return None, None
+
+    return img, shot_path
+
+
+def detect_boxes(app, img, matrix, meta):
+    """Run face detection + recognition, return list of overlay boxes."""
+    has_db = len(matrix) > 0
+    faces = app.get(img)
+    boxes = []
+
+    for face in faces:
+        x1, y1, x2, y2 = face.bbox[:4].astype(int)
+        x1, y1 = max(0, x1), max(0, y1)
+        x2 = min(img.shape[1], x2)
+        y2 = min(img.shape[0], y2)
+
+        emb = face.normed_embedding.astype(np.float32)
+
+        best_sim = -1.0
+        best_meta = None
+        if has_db:
+            sims = matrix @ emb
+            best_idx = int(np.argmax(sims))
+            best_sim = float(sims[best_idx])
+            best_meta = meta[best_idx]
+
+        if best_sim >= DUPLICATE_WARNING_THRESHOLD and best_meta is not None:
+            info = best_meta["info"]
+            label = f"{info['name']} {info['surname']} ({best_sim:.2f})"
+            color = COLOR_RECOGNIZED
+        elif best_sim >= AUTO_THRESHOLD and best_meta is not None:
+            info = best_meta["info"]
+            label = f"{info['name']} {info['surname']} ({best_sim:.2f})"
+            color = COLOR_RECOGNIZED
+        elif best_sim >= LOW_CONF_THRESHOLD and best_meta is not None:
+            info = best_meta["info"]
+            label = f"? {info['name']} {info['surname']} ({best_sim:.2f})"
+            color = COLOR_LOW
+        else:
+            label = "unknown"
+            color = COLOR_UNKNOWN
+
+        boxes.append((x1, y1, x2, y2, label, color))
+
+    return boxes
+
+
+def generate_qml(boxes, sw, sh):
+    """Generate a QML file that draws transparent overlay boxes on screen via WlrLayershell."""
+    rects = []
+    texts = []
+
+    for i, (x1, y1, x2, y2, label, color) in enumerate(boxes):
+        w = max(1, x2 - x1)
+        h = max(1, y2 - y1)
+        hx = bgr_to_qml_hex(color)
+        # Text sits above the face box; center the box vertically on the text
+        text_y = max(0, y1 - 24)
+        text_center_y = text_y + 11  # half of 22px text height
+        half_h = h / 2
+        box_y = text_center_y - half_h
+        rects.append(
+            f'    Rectangle {{\n'
+            f'        x: {x1}; y: {box_y:.1f}; width: {w}; height: {h}\n'
+            f'        border.color: "{hx}"; border.width: 2\n'
+            f'        color: "transparent"\n'
+            f'    }}'
+        )
+        texts.append(
+            f'    Rectangle {{\n'
+            f'        x: {x1}; y: {text_y}; width: {len(label) * 8}; height: 22\n'
+            f'        color: "#000000"\n'
+            f'        opacity: 0.5\n'
+            f'    }}\n'
+            f'    Text {{\n'
+            f'        x: {x1 + 2}; y: {text_y}\n'
+            f'        width: {len(label) * 8}\n'
+            f'        text: "{label}"\n'
+            f'        color: "#ffffff"\n'
+            f'        font.pixelSize: 16\n'
+            f'    }}'
+        )
+
+    qml = (
+        'import QtQuick 2.15\n'
+        'import Quickshell\n'
+        'import Quickshell.Wayland\n'
+        '\n'
+        'PanelWindow {\n'
+        '    visible: true\n'
+        '    color: "transparent"\n'
+        '    WlrLayershell.layer: WlrLayer.Overlay\n'
+        '    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None\n'
+        '    WlrLayershell.namespace: "screen-recognize"\n'
+        '    anchors {\n'
+        '        top: true\n'
+        '        bottom: true\n'
+        '        left: true\n'
+        '        right: true\n'
+        '    }\n'
+    )
+    qml += '\n'.join(rects + texts)
+    qml += (
+        '\n\n'
+        '    Keys.onPressed: {\n'
+        '        if (event.key === Qt.Key_Escape) {\n'
+        '            Qt.quit()\n'
+        '        }\n'
+        '    }\n'
+        '}\n'
+    )
+    QML_FILE.write_text(qml)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Take a screenshot, detect faces, and draw them as an overlay on screen."
+    )
+    parser.add_argument(
+        "-r", "--remove",
+        action="store_true",
+        help="Remove existing screen-recognize overlay.",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cuda", "cpu"],
+        default="cuda",
+        help="Inference device: 'cuda' (GPU, default), 'cpu', or 'auto' (GPU if available).",
+    )
+    args = parser.parse_args()
+
+    if args.remove:
+        pid = is_running()
+        if pid:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                print(f"info: Removed screen-recognize overlay (PID {pid}).")
+            except ProcessLookupError:
+                print("warning: Overlay process not found.")
+                PID_FILE.unlink(missing_ok=True)
+        else:
+            print("info: No screen-recognize overlay running.")
+        return
+
+    existing = is_running()
+    if existing:
+        print(f"info: Stopping existing screen-recognize overlay (PID {existing}).")
+        try:
+            os.kill(existing, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        PID_FILE.unlink(missing_ok=True)
+
+    # Screenshot via grim (Wayland-native)
+    img, shot_path = take_screenshot()
+    if img is None:
+        return
+    print(f"info: Screenshot saved to {shot_path}")
+
+    # Face detection
+    app, providers = create_app(args.device, (640, 640))
+    print(f"info: Using inference providers: {providers}")
+
+    matrix, meta = load_embeddings_matrix()
+    boxes = detect_boxes(app, img, matrix, meta)
+    print(f"info: Detected {len(boxes)} face(s).")
+
+    # Screen dimensions from the screenshot
+    sh, sw = img.shape[:2]
+
+    # Generate QML overlay
+    generate_qml(boxes, sw, sh)
+
+    # Launch quickshell with the generated QML overlay
+    try:
+        proc = subprocess.Popen(
+            ["quickshell", "--path", str(QML_FILE)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        # Save PID of the quickshell process so -r can terminate it
+        PID_FILE.write_text(str(proc.pid))
+        print(f"info: Overlay running (PID {proc.pid}). Press Escape or use -r to close.")
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
