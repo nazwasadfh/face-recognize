@@ -33,10 +33,13 @@ pip install -r requirements.txt
 `onnxruntime-gpu` needs the cuDNN library to run on CUDA. **cuDNN is not in `requirements.txt`** because it depends on your installed CUDA version. Install the matching package from PyPI:
 
 - For CUDA 13.x:
+
   ```bash
   python -m pip install nvidia-cudnn-cu13
   ```
+
 - For CUDA 12.x:
+
   ```bash
   python -m pip install nvidia-cudnn-cu12
   ```
@@ -91,6 +94,27 @@ python recognize.py <video.mp4> <process_every> [--device cuda|cpu|auto]
 - `--device` selects inference device: `cuda` (GPU, default), `cpu`, or `auto` (GPU if available).
 - Requires: `grim`, `quickshell` (available on this Hyprland/Wayland system).
 
+## Screen locker unlocked by face
+
+```bash
+./face-lock              # lock screen; unlock on recognized face
+./face-lock --timeout 30 # offer password fallback after 30s
+./face-lock --device cpu # force CPU inference
+./face-lock --no-timeout # wait forever (face or password only)
+```
+
+- Shows a fullscreen transparent Wayland overlay via **quickshell/WlrLayershell** (overlay layer, exclusive keyboard focus) — blocks the desktop like a normal Wayland locker.
+- In the background, captures camera frames **every 5 seconds** and runs face recognition.
+- If a known face is recognized (similarity ≥ 0.30), the overlay closes and the script exits 0 (screen unlocked).
+- Press **Escape** on the overlay → password fallback in the terminal.
+- If `--timeout` is set and no face is recognized within N seconds, password fallback is offered.
+- Wrong password → locks again (restarts itself).
+- If the overlay process dies, it is automatically restarted to keep the lock active.
+
+**Security warning:** Face recognition alone is not a strong lock — a photo or video can spoof it. Always use `--timeout` so you are not locked out forever if recognition fails.
+
+Requires: `grim`, `quickshell` (Wayland), camera accessible by OpenCV.
+
 ## Live camera preview
 
 ```bash
@@ -125,4 +149,4 @@ python search.py <name> [--exact]
 
 ## Legal / ethical notice
 
-Biometric data (face embeddings) are special category data (e.g. GDPR in the EU). Do not add people to the database without their consent.
+Biometric data (face embeddings) are special category data (e.g. GDPR in the EU). Do not add people to the database without their consent. You can run into some serious legal problems if you do. DO NOT DO THAT OKEY

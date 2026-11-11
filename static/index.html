@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="FaceSearch — a private, fully local face recognition index.">
+<title>FaceSearch — Local Index</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23171613'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23f2efe9' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2.8' fill='%23c6592b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+<script>
+  (function () {
+    var stored = null;
+    try { stored = localStorage.getItem("fs-theme"); } catch (e) {}
+    var dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  })();
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#/" data-nav="index" aria-label="FaceSearch — back to the index">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="11.2" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="16" cy="16" r="3.6" fill="currentColor"/>
+          <path d="M16 1.6v5M16 25.4v5M1.6 16h5M25.4 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">facesearch</span>
+        <span class="brand-sub">local index</span>
+      </span>
+    </a>
+
+    <nav class="tabs" aria-label="Sections">
+      <button class="tab is-active" type="button" data-view="index">
+        Index<span class="tab-count" id="navCount">—</span>
+      </button>
+      <button class="tab" type="button" data-view="scan">Scan</button>
+      <button class="tab" type="button" data-view="about">System</button>
+    </nav>
+
+    <div class="top-actions">
+      <button class="search-trigger" id="searchTrigger" type="button" aria-label="Focus the people filter">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="8.6" cy="8.6" r="5.4" stroke="currentColor" stroke-width="1.5"/>
+          <path d="m12.8 12.8 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Search</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <button class="icon-btn bordered" id="themeToggle" type="button" aria-label="Toggle color theme">
+        <svg class="icon-sun" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="4.1" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M11 1.8v2.1M11 18.1v2.1M1.8 11h2.1M18.1 11h2.1M4.5 4.5l1.5 1.5M16 16l1.5 1.5M17.5 4.5 16 6M6 16l-1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <path d="M18.6 13.4A8.1 8.1 0 0 1 8.6 3.4a8.2 8.2 0 1 0 10 10Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <!-- ============================================================ INDEX -->
+  <section class="view is-active" id="view-index" aria-labelledby="indexTitle">
+    <div class="wrap">
+      <div class="page-head">
+        <div class="page-head-title">
+          <p class="eyebrow">Local face recognition</p>
+          <h1 id="indexTitle">The index</h1>
+          <p class="lede">Every face stored on this machine, in one quiet place. Search the register, open a dossier, or scan a new photograph — nothing ever leaves the device.</p>
+        </div>
+        <dl class="stats">
+          <div class="stat">
+            <dt>People</dt>
+            <dd id="statPeople">—</dd>
+          </div>
+          <div class="stat">
+            <dt>Faceprints</dt>
+            <dd id="statPrints">—</dd>
+          </div>
+          <div class="stat">
+            <dt>Linked records</dt>
+            <dd id="statLinked">—</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="toolbar">
+        <div class="search-field">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="8.6" cy="8.6" r="5.4" stroke="currentColor" stroke-width="1.5"/>
+            <path d="m12.8 12.8 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <input id="search" type="search" placeholder="Filter by name or surname" autocomplete="off" spellcheck="false" aria-label="Filter people by name or surname">
+          <button class="search-clear" id="searchClear" type="button" aria-label="Clear filter" hidden>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="toolbar-actions">
+          <label class="select-wrap">
+            <span class="select-label">Sort</span>
+            <select id="sort">
+              <option value="surname">Surname A–Z</option>
+              <option value="name">Given name A–Z</option>
+              <option value="prints">Most faceprints</option>
+              <option value="linked">Most linked records</option>
+            </select>
+            <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="m3.5 5.5 3.5 3.5 3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </label>
+          <button class="icon-btn bordered" id="refresh" type="button" title="Reload the database" aria-label="Reload the database">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M16.4 8.4A6.5 6.5 0 1 0 16.3 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M16.8 4.2v4.4h-4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="result-bar">
+        <p id="resultMeta">Opening the register…</p>
+        <p class="result-hint" id="resultHint"></p>
+      </div>
+
+      <div class="people-grid" id="grid" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================= SCAN -->
+  <section class="view" id="view-scan" aria-labelledby="scanTitle" hidden>
+    <div class="wrap">
+      <div class="page-head compact">
+        <div class="page-head-title">
+          <p class="eyebrow">Recognition</p>
+          <h1 id="scanTitle">Scan a photograph</h1>
+          <p class="lede">Drop an image and the local model finds every face, then compares it against the faceprints in your index. A face is reported as a match above 30% similarity.</p>
+        </div>
+      </div>
+
+      <div class="scan-layout">
+        <div class="scan-stage" id="scanStage">
+          <div class="dropzone" id="dropZone" role="button" tabindex="0" aria-label="Choose or drop an image to scan">
+            <div class="dropzone-inner">
+              <span class="dropzone-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="11.2" stroke="currentColor" stroke-width="1.3"/>
+                  <circle cx="16" cy="16" r="3.6" fill="currentColor"/>
+                  <path d="M16 1.6v5M16 25.4v5M1.6 16h5M25.4 16h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <p class="dropzone-title">Drop a photo here</p>
+              <p class="dropzone-sub">or <span class="link">browse files</span> · paste from clipboard</p>
+              <p class="dropzone-meta">JPG, PNG or WEBP — processed entirely on this machine</p>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" hidden>
+          </div>
+
+          <div class="preview" id="preview" hidden>
+            <div class="preview-media">
+              <img id="scanImage" alt="Photograph being scanned">
+              <canvas id="scanCanvas" aria-hidden="true"></canvas>
+            </div>
+            <div class="preview-bar">
+              <div class="preview-status" id="scanStatus" role="status">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="scanStatusText">Analyzing…</span>
+              </div>
+              <div class="preview-actions">
+                <span class="preview-file" id="scanFile"></span>
+                <button class="btn ghost" id="scanReset" type="button">New scan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="scan-panel" aria-labelledby="matchesTitle">
+          <div class="panel-head">
+            <h2 id="matchesTitle">Matches</h2>
+            <span class="pill" id="scanCount">—</span>
+          </div>
+          <p class="panel-note">Click a match to open its record.</p>
+          <div class="matches" id="scanResults">
+            <div class="panel-empty">
+              <p class="panel-empty-title">Nothing scanned yet</p>
+              <p>Results for every face in the image will appear here.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ ABOUT -->
+  <section class="view" id="view-about" aria-labelledby="aboutTitle" hidden>
+    <div class="wrap">
+      <div class="page-head compact">
+        <div class="page-head-title">
+          <p class="eyebrow">System</p>
+          <h1 id="aboutTitle">Under the hood</h1>
+          <p class="lede">A small Flask service, a local ONNX model and a folder of files. No accounts, no cloud, no telemetry.</p>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <article class="info-card">
+          <h2>Recognition</h2>
+          <dl class="rows">
+            <div><dt>Model</dt><dd>InsightFace <span class="mono">buffalo_l</span></dd></div>
+            <div><dt>Embeddings</dt><dd>ArcFace · 512-dim, normalized</dd></div>
+            <div><dt>Comparison</dt><dd>Cosine similarity</dd></div>
+            <div><dt>Match threshold</dt><dd>0.30</dd></div>
+            <div><dt>Inference</dt><dd>ONNX Runtime, on-device</dd></div>
+          </dl>
+        </article>
+
+        <article class="info-card">
+          <h2>Storage</h2>
+          <dl class="rows">
+            <div><dt>Records</dt><dd><span class="mono">persons/&lt;uuid&gt;/</span></dd></div>
+            <div><dt>Faceprint</dt><dd><span class="mono">fingerprints/&lt;n&gt;.npy</span></dd></div>
+            <div><dt>Portrait</dt><dd><span class="mono">photo.png</span></dd></div>
+            <div><dt>Metadata</dt><dd><span class="mono">info.json</span></dd></div>
+            <div><dt>Index</dt><dd>Rebuilt from disk on request</dd></div>
+          </dl>
+        </article>
+
+        <article class="info-card accent">
+          <h2>Privacy</h2>
+          <dl class="rows">
+            <div><dt>Cloud</dt><dd>Not used</dd></div>
+            <div><dt>Network calls</dt><dd>This machine only</dd></div>
+            <div><dt>Biometrics</dt><dd>Special-category data</dd></div>
+            <div><dt>Consent</dt><dd>Required — collect only with permission</dd></div>
+          </dl>
+          <p class="info-note">Face embeddings can identify a person. Treat every record here the way you would a fingerprint card.</p>
+        </article>
+
+        <article class="info-card">
+          <h2>Keyboard</h2>
+          <dl class="rows keys">
+            <div><dt><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></dt><dd>Search the index</dd></div>
+            <div><dt><kbd>/</kbd></dt><dd>Jump to the filter</dd></div>
+            <div><dt><kbd>Esc</kbd></dt><dd>Close a record or clear the filter</dd></div>
+            <div><dt><kbd>Enter</kbd></dt><dd>Open the focused card</dd></div>
+          </dl>
+        </article>
+      </div>
+
+      <section class="endpoints" aria-labelledby="apiTitle">
+        <div class="endpoints-head">
+          <h2 id="apiTitle">Local API</h2>
+          <p>Everything this interface reads is served by the Flask app on this machine.</p>
+        </div>
+        <ul class="endpoint-list">
+          <li><span class="method">GET</span><span class="mono">/api/persons</span><span>All records</span></li>
+          <li><span class="method">GET</span><span class="mono">/api/persons/&lt;id&gt;</span><span>One record with linked data</span></li>
+          <li><span class="method">GET</span><span class="mono">/api/search?q=</span><span>Partial name search</span></li>
+          <li><span class="method">GET</span><span class="mono">/photo/&lt;id&gt;</span><span>Cropped portrait</span></li>
+          <li><span class="method">POST</span><span class="mono">/api/recognize</span><span>Detect and match faces</span></li>
+        </ul>
+      </section>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>FaceSearch — local face recognition, entirely offline.</p>
+    <p class="foot-note">Biometric data is sensitive. Add people only with their consent.</p>
+  </div>
+</footer>
+
+<!-- =========================================================== DRAWER -->
+<div class="scrim" id="scrim" aria-hidden="true"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawerTitle" role="dialog" aria-modal="true">
+  <div class="drawer-top">
+    <span class="drawer-kicker" id="drawerKicker">Record</span>
+    <button class="icon-btn" id="drawerClose" type="button" aria-label="Close record">
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <div class="drawer-scroll" id="drawerBody"></div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<noscript>
+  <p class="noscript">This interface needs JavaScript enabled to read the local database.</p>
+</noscript>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

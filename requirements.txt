@@ -2,6 +2,7 @@ insightface
 onnxruntime-gpu
 opencv-python
 numpy
+flask
 
 # System dependencies (not pip-installable):
 #   grim      - Wayland-native screenshot
