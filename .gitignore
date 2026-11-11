@@ -8,6 +8,7 @@ result.jpg
 .env
 persons/
 dis.persons/
+static/
 snap.jpg
 snap.mp4
 models/
